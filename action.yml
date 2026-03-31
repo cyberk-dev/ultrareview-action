@@ -34,6 +34,10 @@ inputs:
     description: 'Minimum judge score threshold (0-1)'
     required: false
     default: '0.6'
+  feedback:
+    description: 'Enable self-improving feedback loop (saves review data for prompt optimization)'
+    required: false
+    default: 'true'
 
 runs:
   using: 'composite'
@@ -62,3 +66,6 @@ runs:
         PR_NUMBER: ${{ github.event.pull_request.number }}
         REPO_OWNER: ${{ github.repository_owner }}
         REPO_NAME: ${{ github.event.repository.name }}
+        FEEDBACK_ENABLED: ${{ inputs.feedback }}
+        FEEDBACK_DIR: ${{ github.action_path }}/benchmark/feedback
+        GITHUB_EVENT_ACTION: ${{ github.event.action }}
