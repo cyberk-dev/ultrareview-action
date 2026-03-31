@@ -4,7 +4,21 @@ Clone of Claude Code's /ultrareview command — Bun + Ink + TypeScript interacti
 
 ## Quick Start (Any Repo)
 
-Add to your repo's `.github/workflows/ultrareview.yml`:
+### One-command setup
+
+```bash
+# cd into your repo, then:
+bash <(curl -fsSL https://raw.githubusercontent.com/cyberk-dev/ultrareview-action/main/scripts/init.sh)
+```
+
+This will:
+1. Create `.github/workflows/ultrareview.yml` (pinned to latest SHA)
+2. Check if `AI_API_KEY` secret is set
+3. Show next steps
+
+### Manual setup
+
+Add `.github/workflows/ultrareview.yml`:
 
 ```yaml
 name: Ultrareview
@@ -21,14 +35,18 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: cyberk-dev/ultrareview-action@v1
+      - uses: cyberk-dev/ultrareview-action@872ca0ae2de61dc546056f908670cfc27ea4e9d1
         with:
           ai-api-key: ${{ secrets.AI_API_KEY }}
 ```
 
-Then add `AI_API_KEY` secret in your repo Settings → Secrets.
+Then set secrets:
+```bash
+gh secret set AI_API_KEY --repo your-org/your-repo
+gh secret set AI_BASE_URL --repo your-org/your-repo  # optional
+```
 
-See [`examples/ultrareview-workflow.yml`](./examples/ultrareview-workflow.yml) for the full example with optional overrides.
+See [`examples/ultrareview-workflow.yml`](./examples/ultrareview-workflow.yml) for full example with optional overrides.
 
 ## Setup
 
