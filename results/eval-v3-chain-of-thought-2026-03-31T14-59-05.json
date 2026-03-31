@@ -1,0 +1,249 @@
+{
+  "totalSamples": 10,
+  "avgPrecision": 1,
+  "avgRecall": 0,
+  "avgF1": 0,
+  "totalDuration": 0,
+  "results": [
+    {
+      "sampleId": "sample-001",
+      "foundBugs": [],
+      "groundTruth": [
+        {
+          "file": "src/api/users.ts",
+          "line": 9,
+          "severity": "critical",
+          "category": "security",
+          "title": "SQL injection via template literal in user lookup",
+          "description": "User-controlled req.params.id is interpolated directly into SQL query string"
+        }
+      ],
+      "match": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 1,
+        "precision": 1,
+        "recall": 0,
+        "f1": 0,
+        "matches": []
+      },
+      "duration": 0
+    },
+    {
+      "sampleId": "sample-002",
+      "foundBugs": [],
+      "groundTruth": [
+        {
+          "file": "src/api/admin.ts",
+          "line": 5,
+          "severity": "critical",
+          "category": "security",
+          "title": "Missing authentication check on admin deleteUser endpoint",
+          "description": "Admin endpoint has no auth/authorization check — any caller can delete users"
+        }
+      ],
+      "match": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 1,
+        "precision": 1,
+        "recall": 0,
+        "f1": 0,
+        "matches": []
+      },
+      "duration": 0
+    },
+    {
+      "sampleId": "sample-003",
+      "foundBugs": [],
+      "groundTruth": [
+        {
+          "file": "src/services/profile.ts",
+          "line": 14,
+          "severity": "high",
+          "category": "logic",
+          "title": "Null dereference: profile.name accessed without null check",
+          "description": "db.findOne can return null, but profile.name is accessed without optional chaining or null guard"
+        }
+      ],
+      "match": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 1,
+        "precision": 1,
+        "recall": 0,
+        "f1": 0,
+        "matches": []
+      },
+      "duration": 0
+    },
+    {
+      "sampleId": "sample-004",
+      "foundBugs": [],
+      "groundTruth": [
+        {
+          "file": "src/services/counter.ts",
+          "line": 8,
+          "severity": "high",
+          "category": "logic",
+          "title": "Race condition in page view counter: read-modify-write pattern",
+          "description": "SELECT then UPDATE is not atomic — concurrent requests will read the same value and produce incorrect counts. Should use UPDATE views = views + 1 atomically"
+        }
+      ],
+      "match": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 1,
+        "precision": 1,
+        "recall": 0,
+        "f1": 0,
+        "matches": []
+      },
+      "duration": 0
+    },
+    {
+      "sampleId": "sample-005",
+      "foundBugs": [],
+      "groundTruth": [
+        {
+          "file": "src/api/products.ts",
+          "line": 14,
+          "severity": "high",
+          "category": "security",
+          "title": "Missing server-side price validation: negative prices accepted",
+          "description": "Price validation removed from server, trusting frontend only. Any API client can send negative prices, corrupting order totals"
+        }
+      ],
+      "match": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 1,
+        "precision": 1,
+        "recall": 0,
+        "f1": 0,
+        "matches": []
+      },
+      "duration": 0
+    },
+    {
+      "sampleId": "sample-006",
+      "foundBugs": [],
+      "groundTruth": [
+        {
+          "file": "src/jobs/email-sender.ts",
+          "line": 15,
+          "severity": "high",
+          "category": "logic",
+          "title": "Unhandled promise rejection in scheduleWelcomeEmail",
+          "description": "sendWelcomeEmail() returns a Promise that is not awaited or .catch()'d — any rejection will be an unhandled rejection, crashing Node.js in newer versions"
+        }
+      ],
+      "match": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 1,
+        "precision": 1,
+        "recall": 0,
+        "f1": 0,
+        "matches": []
+      },
+      "duration": 0
+    },
+    {
+      "sampleId": "sample-007",
+      "foundBugs": [],
+      "groundTruth": [
+        {
+          "file": "src/api/catalog.ts",
+          "line": 7,
+          "severity": "high",
+          "category": "performance",
+          "title": "N+1 query: category fetched individually per product in loop",
+          "description": "For 50 products this executes 51 SQL queries. Should use a JOIN or batch query with WHERE id = ANY($1)"
+        }
+      ],
+      "match": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 1,
+        "precision": 1,
+        "recall": 0,
+        "f1": 0,
+        "matches": []
+      },
+      "duration": 0
+    },
+    {
+      "sampleId": "sample-008",
+      "foundBugs": [],
+      "groundTruth": [
+        {
+          "file": "src/services/payment.ts",
+          "line": 11,
+          "severity": "critical",
+          "category": "logic",
+          "title": "Missing error handling in chargeCard: Stripe errors crash caller",
+          "description": "stripe.charges.create throws on card decline or API errors. Without try/catch, payment failures become unhandled exceptions that crash the request handler"
+        }
+      ],
+      "match": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 1,
+        "precision": 1,
+        "recall": 0,
+        "f1": 0,
+        "matches": []
+      },
+      "duration": 0
+    },
+    {
+      "sampleId": "sample-009",
+      "foundBugs": [],
+      "groundTruth": [
+        {
+          "file": "src/utils/validator.ts",
+          "line": 14,
+          "severity": "low",
+          "category": "style",
+          "title": "Dead code: return statement after throw is unreachable",
+          "description": "The return statement on line 14 can never execute because the preceding throw always exits. Indicates a logic error or a refactoring artifact"
+        }
+      ],
+      "match": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 1,
+        "precision": 1,
+        "recall": 0,
+        "f1": 0,
+        "matches": []
+      },
+      "duration": 0
+    },
+    {
+      "sampleId": "sample-010",
+      "foundBugs": [],
+      "groundTruth": [
+        {
+          "file": "src/api/search.ts",
+          "line": 13,
+          "severity": "high",
+          "category": "logic",
+          "title": "Off-by-one in pagination: page 1 skips first 20 results",
+          "description": "offset = page * limit gives offset=20 for page 1. Should be (page - 1) * limit so page 1 starts at offset 0"
+        }
+      ],
+      "match": {
+        "truePositives": 0,
+        "falsePositives": 0,
+        "falseNegatives": 1,
+        "precision": 1,
+        "recall": 0,
+        "f1": 0,
+        "matches": []
+      },
+      "duration": 0
+    }
+  ]
+}

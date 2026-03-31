@@ -1,0 +1,28 @@
+# Copy this file to your repo at .github/workflows/ultrareview.yml
+name: Ultrareview
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: cyberk-dev/ultrareview-action@v1
+        with:
+          ai-api-key: ${{ secrets.AI_API_KEY }}
+          # Optional overrides:
+          # ai-base-url: https://your-proxy.example.com
+          # analysis-model: gpt-5.4
+          # judge-model: gpt-5.2
+          # min-confidence: '0.7'
+          # min-judge-score: '0.6'
