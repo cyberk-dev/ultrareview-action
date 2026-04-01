@@ -16,6 +16,8 @@ const makeBug = (overrides: Partial<JudgedBug> = {}): JudgedBug => ({
   adjustedSeverity: 'high',
   verified: true,
   verificationEvidence: 'test',
+  evidenceMatch: true,
+  symbolsVerified: true,
   domain: 'logic',
   bugType: 'null-reference',
   classificationConfidence: 0.8,

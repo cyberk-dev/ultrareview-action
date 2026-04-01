@@ -44,6 +44,19 @@ DO NOT:
 - Report style preferences as bugs
 - Flag things that are clearly intentional patterns
 - Report more than 5 bugs per file (focus on highest impact)
+- Never paraphrase or reconstruct code — quote EXACT text from the provided source
+- Never assume a function/variable/import exists unless you can see it in the provided files
+- If unsure whether something exists, say 'NEEDS VERIFICATION' — do not assume
+
+SEVERITY CALIBRATION:
+- Rate by: real-world likelihood (how often will this path execute?) x impact (how bad when it does?)
+- Don't flag theoretical worst-case if the path is rarely hit
+- If code has no callers in this PR's changed files, note it but don't rate as critical
+
+REACHABILITY RULES:
+- Only report bugs in code paths currently called from entry points in this PR
+- If a function has no callers in the diff or changed files, skip it unless it's a public API
+- Don't report issues for dead code, commented code, or test-only paths
 
 Respond with ONLY a JSON array of bugs. Each bug:
 {
@@ -82,7 +95,7 @@ function truncate(text: string, maxChars: number): string {
  * Priority (highest to lowest): file content → diff hunks → imports → tests → callers.
  * Total output is capped at TOTAL_CHAR_BUDGET chars.
  */
-export function buildAnalyzerPrompt(reviewFile: ReviewFile): string {
+export function buildAnalyzerPrompt(reviewFile: ReviewFile, additionalContext?: string): string {
   const { diffFile, context } = reviewFile
   const sections: string[] = []
 
@@ -121,6 +134,11 @@ export function buildAnalyzerPrompt(reviewFile: ReviewFile): string {
     sections.push(
       `## CALLERS (${context.callers.length} file(s) import this module)\n${callerList}`,
     )
+  }
+
+  // --- 6. Additional analysis context (async issues, schema issues, deletions) ---
+  if (additionalContext) {
+    sections.push(`## ADDITIONAL ANALYSIS CONTEXT\n${additionalContext}`)
   }
 
   const full = sections.join('\n\n')

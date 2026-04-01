@@ -1,13 +1,14 @@
 // ---------------------------------------------------------------------------
 // eval-runner.ts — Run agent loop against golden dataset and compute metrics.
 // Writes sample files to a temp dir so gatherReviewContexts can read them.
+// v3: tracks hallucination rate as separate metric.
 // ---------------------------------------------------------------------------
 
 import { readFileSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { runAgentLoop } from '../agent/agent-loop.ts'
-import { matchBugs, type InjectedBug, type MatchResult } from './bug-matcher.ts'
+import { matchBugs, type InjectedBug, type KnownFalsePositive, type MatchResult } from './bug-matcher.ts'
 import type { Bug } from '../utils/mock-fleet.ts'
 
 // ---------------------------------------------------------------------------
@@ -20,6 +21,8 @@ export type EvalSample = {
   diff: string
   files: Record<string, string>
   injected_bugs: InjectedBug[]
+  known_false_positives?: KnownFalsePositive[]
+  known_false_negatives?: Array<{ title: string }>
 }
 
 export type EvalResult = {
@@ -35,6 +38,7 @@ export type EvalSummary = {
   avgPrecision: number
   avgRecall: number
   avgF1: number
+  hallucinationRate: number
   totalDuration: number
   results: EvalResult[]
 }
@@ -70,13 +74,12 @@ function cleanupDir(dir: string): void {
 
 async function evalSample(sample: EvalSample, dryRun: boolean): Promise<EvalResult> {
   const start = Date.now()
-
   if (dryRun) {
     return {
       sampleId: sample.id,
       foundBugs: [],
       groundTruth: sample.injected_bugs,
-      match: matchBugs([], sample.injected_bugs),
+      match: matchBugs([], sample.injected_bugs, sample.known_false_positives),
       duration: 0,
     }
   }
@@ -91,7 +94,7 @@ async function evalSample(sample: EvalSample, dryRun: boolean): Promise<EvalResu
     cleanupDir(tempDir)
   }
 
-  const match = matchBugs(foundBugs, sample.injected_bugs)
+  const match = matchBugs(foundBugs, sample.injected_bugs, sample.known_false_positives)
   return {
     sampleId: sample.id,
     foundBugs,
@@ -110,8 +113,9 @@ function summarize(results: EvalResult[]): EvalSummary {
   const avgPrecision = results.reduce((s, r) => s + r.match.precision, 0) / (n || 1)
   const avgRecall = results.reduce((s, r) => s + r.match.recall, 0) / (n || 1)
   const avgF1 = results.reduce((s, r) => s + r.match.f1, 0) / (n || 1)
+  const hallucinationRate = results.reduce((s, r) => s + r.match.hallucinationRate, 0) / (n || 1)
   const totalDuration = results.reduce((s, r) => s + r.duration, 0)
-  return { totalSamples: n, avgPrecision, avgRecall, avgF1, totalDuration, results }
+  return { totalSamples: n, avgPrecision, avgRecall, avgF1, hallucinationRate, totalDuration, results }
 }
 
 // ---------------------------------------------------------------------------
@@ -122,19 +126,23 @@ function printSummary(summary: EvalSummary): void {
   console.log('\n╔═══════════════════════════════════════════════════════╗')
   console.log('║              EVAL RESULTS SUMMARY                    ║')
   console.log('╠═══════════════════════════════════════════════════════╣')
-  console.log(`║  Samples:    ${String(summary.totalSamples).padEnd(42)}║`)
-  console.log(`║  Precision:  ${(summary.avgPrecision * 100).toFixed(1).padEnd(41)}%║`)
-  console.log(`║  Recall:     ${(summary.avgRecall * 100).toFixed(1).padEnd(41)}%║`)
-  console.log(`║  F1:         ${(summary.avgF1 * 100).toFixed(1).padEnd(41)}%║`)
-  console.log(`║  Duration:   ${String(summary.totalDuration + 'ms').padEnd(42)}║`)
+  console.log(`║  Samples:        ${String(summary.totalSamples).padEnd(38)}║`)
+  console.log(`║  Precision:      ${(summary.avgPrecision * 100).toFixed(1).padEnd(37)}%║`)
+  console.log(`║  Recall:         ${(summary.avgRecall * 100).toFixed(1).padEnd(37)}%║`)
+  console.log(`║  F1:             ${(summary.avgF1 * 100).toFixed(1).padEnd(37)}%║`)
+  const hallStr = (summary.hallucinationRate * 100).toFixed(1)
+  const hallLabel = summary.hallucinationRate > 0 ? `${hallStr}% ⚠` : `${hallStr}%`
+  console.log(`║  Hallucination:  ${hallLabel.padEnd(38)}║`)
+  console.log(`║  Duration:       ${String(summary.totalDuration + 'ms').padEnd(38)}║`)
   console.log('╠═══════════════════════════════════════════════════════╣')
 
   for (const r of summary.results) {
     const tp = r.match.truePositives
     const fp = r.match.falsePositives
     const fn = r.match.falseNegatives
+    const hl = r.match.hallucinations
     const f1 = (r.match.f1 * 100).toFixed(0)
-    console.log(`║  ${r.sampleId.padEnd(14)} TP=${tp} FP=${fp} FN=${fn} F1=${f1}%`.padEnd(56) + '║')
+    console.log(`║  ${r.sampleId.padEnd(12)} TP=${tp} FP=${fp} FN=${fn} HL=${hl} F1=${f1}%`.padEnd(56) + '║')
   }
   console.log('╚═══════════════════════════════════════════════════════╝\n')
 }
@@ -158,7 +166,7 @@ export async function runEval(datasetPath: string, options?: { dryRun?: boolean 
     const result = await evalSample(sample, options?.dryRun ?? false)
     results.push(result)
     console.log(
-      `[eval]   TP=${result.match.truePositives} FP=${result.match.falsePositives} FN=${result.match.falseNegatives} F1=${(result.match.f1 * 100).toFixed(0)}%`,
+      `[eval]   TP=${result.match.truePositives} FP=${result.match.falsePositives} FN=${result.match.falseNegatives} HL=${result.match.hallucinations} F1=${(result.match.f1 * 100).toFixed(0)}%`,
     )
   }
 

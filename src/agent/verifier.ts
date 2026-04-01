@@ -1,12 +1,16 @@
 // ---------------------------------------------------------------------------
 // verifier.ts — Verify each bug by reading actual source code.
-// Reads file at bug location, checks evidence match, uses AI to confirm.
+// v3: 100% deterministic verification — no AI call for evidence checking.
+// Hard rejection: evidence not found in source → auto-reject (confidence=0).
 // ---------------------------------------------------------------------------
 
-import { chat } from '../services/ai-client.ts'
 import type { ClassifiedBug } from './bug-classifier.ts'
+import {
+  strictEvidenceMatch,
+  extractReferencedSymbols,
+  verifySymbols,
+} from './verifier-helpers.ts'
 
-const VERIFY_MODEL = process.env.AI_CLASSIFY_MODEL ?? 'gpt-5.4-mini'
 const CONTEXT_LINES = 10
 const MAX_CONCURRENCY = 10
 
@@ -18,6 +22,8 @@ export type VerifiedBug = ClassifiedBug & {
   verified: boolean
   verificationEvidence: string
   confidence: number // 0-1
+  evidenceMatch: boolean
+  symbolsVerified: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -45,87 +51,80 @@ async function readSourceContext(filePath: string, line: number): Promise<string
 }
 
 // ---------------------------------------------------------------------------
-// Fuzzy match: check if evidence string appears in source context
+// Read full file content for symbol verification
 // ---------------------------------------------------------------------------
 
-function evidenceMatchesSource(evidence: string, sourceContext: string): boolean {
-  const normEvidence = evidence.trim().toLowerCase()
-  const normSource = sourceContext.toLowerCase()
-  if (!normEvidence) return false
-  // Use first 60 chars of evidence for matching
-  return normSource.includes(normEvidence.slice(0, 60))
+async function readFullFile(filePath: string): Promise<string | null> {
+  try {
+    const file = Bun.file(filePath)
+    const exists = await file.exists()
+    if (!exists) return null
+    return await file.text()
+  } catch {
+    return null
+  }
 }
 
-const VERIFY_SYSTEM = `You are a code reviewer verifying bug reports.
-Given bug details and actual source code, determine if the bug is real.
-Output JSON: { verified: boolean, confidence: number, evidence: string }
-confidence is 0-1. evidence is a brief explanation (max 100 chars).`
-
 // ---------------------------------------------------------------------------
-// Verify a single bug
+// Verify a single bug — deterministic, no AI call
 // ---------------------------------------------------------------------------
 
 export async function verifyBug(bug: ClassifiedBug, repoRoot: string): Promise<VerifiedBug> {
   const filePath = `${repoRoot}/${bug.file}`
   const sourceContext = await readSourceContext(filePath, bug.line)
 
+  // Gate 1: File not found → reject
   if (!sourceContext) {
-    // File not readable — low confidence unverified
-    return { ...bug, verified: false, verificationEvidence: 'source file not found', confidence: 0.2 }
+    return {
+      ...bug,
+      verified: false,
+      verificationEvidence: 'source file not found',
+      confidence: 0,
+      evidenceMatch: false,
+      symbolsVerified: false,
+    }
   }
 
-  // Quick evidence match check — boosts or reduces confidence
-  const evidenceMatch = evidenceMatchesSource(bug.evidence, sourceContext)
+  // Gate 2: Strict evidence match — normalize whitespace, check ALL lines
+  const evidenceFound = strictEvidenceMatch(bug.evidence, sourceContext)
 
-  const prompt = `Bug: ${bug.title}
-Description: ${bug.description}
-Evidence claimed: ${bug.evidence}
-File: ${bug.file} line ${bug.line}
-
-Actual source code (±${CONTEXT_LINES} lines):
-\`\`\`
-${sourceContext}
-\`\`\`
-
-Evidence match in source: ${evidenceMatch ? 'YES' : 'NO'}
-
-Is this bug real? Output JSON only.`
-
-  const prevModel = process.env.AI_MODEL
-  process.env.AI_MODEL = VERIFY_MODEL
-
-  try {
-    const response = await chat(
-      [{ role: 'user', content: prompt }],
-      { system: VERIFY_SYSTEM, maxTokens: 512 },
-    )
-
-    // Parse AI response
-    const cleaned = response.replace(/```(?:json)?\s*/g, '').replace(/```/g, '').trim()
-    const parsed = JSON.parse(cleaned) as { verified?: boolean; confidence?: number; evidence?: string }
-
-    const baseConfidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0.5
-    // Boost confidence if evidence matched source
-    const confidence = evidenceMatch ? Math.min(1, baseConfidence + 0.1) : baseConfidence
-
+  if (!evidenceFound) {
     return {
       ...bug,
-      verified: parsed.verified ?? confidence >= 0.6,
-      verificationEvidence: parsed.evidence ?? (evidenceMatch ? 'evidence matches source' : 'no evidence match'),
-      confidence,
+      verified: false,
+      verificationEvidence: 'evidence text not found in source code — possible hallucination',
+      confidence: 0,
+      evidenceMatch: false,
+      symbolsVerified: false,
     }
-  } catch {
-    // AI failed — use evidence match as signal
-    const confidence = evidenceMatch ? 0.6 : 0.4
+  }
+
+  // Gate 3: Symbol verification — check referenced identifiers exist in full file
+  const fullContent = await readFullFile(filePath)
+  const symbols = extractReferencedSymbols(bug.evidence, bug.description)
+  const symbolResult = fullContent
+    ? verifySymbols(symbols, fullContent)
+    : { found: [], missing: symbols }
+
+  if (symbolResult.missing.length > 0) {
     return {
       ...bug,
-      verified: evidenceMatch,
-      verificationEvidence: evidenceMatch ? 'evidence matches source (AI unavailable)' : 'could not verify',
-      confidence,
+      verified: false,
+      verificationEvidence: `referenced symbols not found: ${symbolResult.missing.join(', ')}`,
+      confidence: 0.1,
+      evidenceMatch: true,
+      symbolsVerified: false,
     }
-  } finally {
-    if (prevModel === undefined) delete process.env.AI_MODEL
-    else process.env.AI_MODEL = prevModel
+  }
+
+  // All gates passed → verified
+  return {
+    ...bug,
+    verified: true,
+    verificationEvidence: 'evidence and all symbols verified in source',
+    confidence: 0.9,
+    evidenceMatch: true,
+    symbolsVerified: true,
   }
 }
 
@@ -145,14 +144,23 @@ export async function verifyAllBugs(bugs: ClassifiedBug[], repoRoot: string): Pr
       if (outcome.status === 'fulfilled') {
         results.push(outcome.value)
       } else {
-        // Return unverified with low confidence on failure
         const bug = batch[j]!
-        results.push({ ...bug, verified: false, verificationEvidence: 'verification failed', confidence: 0.1 })
+        results.push({
+          ...bug,
+          verified: false,
+          verificationEvidence: 'verification failed',
+          confidence: 0.1,
+          evidenceMatch: false,
+          symbolsVerified: false,
+        })
       }
     }
   }
 
   const verified = results.filter((b) => b.verified).length
-  console.log(`[verifier] ${results.length} bugs verified: ${verified} real, ${results.length - verified} uncertain`)
+  const rejected = results.filter((b) => !b.evidenceMatch).length
+  console.log(
+    `[verifier] ${results.length} bugs: ${verified} verified, ${rejected} rejected (no evidence match), ${results.length - verified - rejected} uncertain`,
+  )
   return results
 }

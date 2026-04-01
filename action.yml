@@ -34,6 +34,10 @@ inputs:
     description: 'Minimum judge score threshold (0-1)'
     required: false
     default: '0.6'
+  timeout-minutes:
+    description: 'Pipeline timeout in minutes (default 10, set 30 for thorough analysis)'
+    required: false
+    default: '10'
   feedback:
     description: 'Enable self-improving feedback loop (saves review data for prompt optimization)'
     required: false
@@ -53,6 +57,7 @@ runs:
 
     - name: Run Ultrareview
       shell: bash
+      timeout-minutes: ${{ inputs.timeout-minutes }}
       run: bun run ${{ github.action_path }}/src/github/action-entry.ts
       env:
         GITHUB_TOKEN: ${{ github.token }}
