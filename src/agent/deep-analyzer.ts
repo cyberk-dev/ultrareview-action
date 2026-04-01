@@ -75,7 +75,7 @@ export async function analyzeFile(reviewFile: ReviewFile, additionalContext?: st
   try {
     response = await chat(
       [{ role: 'user', content: promptText }],
-      { system: getSystemPrompt(), maxTokens: 4096, timeoutMs: 180_000 },
+      { system: getSystemPrompt(), maxTokens: 4096, timeoutMs: 900_000 },
     )
   } catch (err) {
     console.warn(
