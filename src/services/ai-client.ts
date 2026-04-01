@@ -13,7 +13,7 @@ export type Message = {
   content: string
 }
 
-type ChatOptions = { system?: string; maxTokens?: number }
+type ChatOptions = { system?: string; maxTokens?: number; timeoutMs?: number }
 
 // ---------------------------------------------------------------------------
 // Format-aware helpers
@@ -69,9 +69,10 @@ function buildBody(messages: Message[], opts: ChatOptions, stream: boolean) {
 
 export async function chat(messages: Message[], opts: ChatOptions = {}): Promise<string> {
   const body = buildBody(messages, opts, false)
+  const timeout = opts.timeoutMs ?? 60_000
   const attempt = () => fetch(endpoint(), {
     method: 'POST', headers: buildHeaders(),
-    body: JSON.stringify(body), signal: AbortSignal.timeout(60_000),
+    body: JSON.stringify(body), signal: AbortSignal.timeout(timeout),
   })
 
   let res = await attempt()
