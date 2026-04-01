@@ -67,7 +67,7 @@ runs:
         AI_CLASSIFY_MODEL: ${{ inputs.classify-model }}
         FILTER_MIN_CONFIDENCE: ${{ inputs.min-confidence }}
         FILTER_MIN_JUDGE_SCORE: ${{ inputs.min-judge-score }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
+        PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
         REPO_OWNER: ${{ github.repository_owner }}
         REPO_NAME: ${{ github.event.repository.name }}
         FEEDBACK_ENABLED: ${{ inputs.feedback }}
