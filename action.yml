@@ -57,7 +57,6 @@ runs:
 
     - name: Run Ultrareview
       shell: bash
-      timeout-minutes: ${{ inputs.timeout-minutes }}
       run: bun run ${{ github.action_path }}/src/github/action-entry.ts
       env:
         GITHUB_TOKEN: ${{ github.token }}

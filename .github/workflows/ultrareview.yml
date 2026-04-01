@@ -2,7 +2,9 @@ name: Ultrareview
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, reopened, closed]
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read
@@ -12,8 +14,25 @@ jobs:
   review:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Run on: PR opened/reopened, OR "/review" comment on a PR
+    if: >-
+      github.event_name == 'pull_request' ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        contains(github.event.comment.body, '/review')
+      )
 
     steps:
+      - name: React to comment
+        if: github.event_name == 'issue_comment'
+        shell: bash
+        run: |
+          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            -f content=eyes
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -26,3 +45,5 @@ jobs:
           analysis-model: gpt-5.4
           judge-model: gpt-5.2
           classify-model: gpt-5.4-mini
+        env:
+          PR_NUMBER_OVERRIDE: ${{ github.event.issue.number }}

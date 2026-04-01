@@ -6,7 +6,8 @@
 // ---------------------------------------------------------------------------
 
 async function main() {
-  const prNumber = process.env.PR_NUMBER
+  // PR_NUMBER from action input, PR_NUMBER_OVERRIDE from issue_comment trigger
+  const prNumber = process.env.PR_NUMBER || process.env.PR_NUMBER_OVERRIDE
   const owner = process.env.REPO_OWNER ?? process.env.GITHUB_REPOSITORY_OWNER
   const repoName = process.env.REPO_NAME ?? process.env.GITHUB_REPOSITORY?.split('/')[1]
   const repoRoot = process.cwd()
