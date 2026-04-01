@@ -1,0 +1,64 @@
+[
+  {
+    "id": "cyberk-skin-agent-app-pr311",
+    "source": "cyberk-dev/skin-agent-app#311",
+    "description": "Real-world PR: add chat history feature with DB migration, AI stream, and routine generation",
+    "diff": "diff --git a/packages/db/schema/chat.ts b/packages/db/schema/chat.ts\nnew file\n--- /dev/null\n+++ b/packages/db/schema/chat.ts\n@@ -0,0 +1,30 @@\n+import { pgTable, text, timestamp, integer, uuid } from 'drizzle-orm/pg-core'\n+\n+export const chatMessages = pgTable('chat_messages', {\n+  id: uuid('id').primaryKey().defaultRandom(),\n+  userId: text('user_id').notNull(),\n+  sessionId: text('session_id').notNull(),\n+  role: text('role').notNull(),\n+  content: text('content').notNull(),\n+  createdAt: timestamp('created_at').defaultNow().notNull(),\n+})\n\ndiff --git a/apps/server/src/routes/chat.ts b/apps/server/src/routes/chat.ts\n--- a/apps/server/src/routes/chat.ts\n+++ b/apps/server/src/routes/chat.ts\n@@ -10,6 +10,20 @@\n+import { chatMessages } from '@pkg/db/schema/chat'\n+\n+router.post('/chat/send', async (c) => {\n+  const { message, sessionId } = await c.req.json()\n+  const userId = c.get('userId')\n+\n+  const history = await db.select().from(chatMessages)\n+    .where(eq(chatMessages.sessionId, sessionId))\n+    .orderBy(chatMessages.createdAt)\n+\n+  const stream = streamText({\n+    model: gemini('gemini-2.5-flash'),\n+    messages: [...history.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: message }],\n+    onFinish: async (result) => {\n+      await db.insert(chatMessages).values([\n+        { userId, sessionId, role: 'user', content: message },\n+        { userId, sessionId, role: 'assistant', content: result.text },\n+      ])\n+    },\n+  })\n+  return stream.toDataStreamResponse()\n+})\n\ndiff --git a/apps/native/src/hooks/use-ai-stream.ts b/apps/native/src/hooks/use-ai-stream.ts\n--- a/apps/native/src/hooks/use-ai-stream.ts\n+++ b/apps/native/src/hooks/use-ai-stream.ts\n@@ -15,8 +15,12 @@\n+  const fetchHistory = async () => {\n+    const res = await fetch(`/api/chat/history?sessionId=${sessionId}`)\n+    return res.json()\n+  }\n+\n   const startStream = async () => {\n+    fetchHistory()\n     const response = await fetch('/api/chat/send', {\n       method: 'POST',\n       body: JSON.stringify({ message, sessionId }),\n     })\n\ndiff --git a/packages/api/src/routers/routine.ts b/packages/api/src/routers/routine.ts\n--- a/packages/api/src/routers/routine.ts\n+++ b/packages/api/src/routers/routine.ts\n@@ -42,10 +42,6 @@\n-  if (!routine || routine.products.length === 0) {\n-    throw new TRPCError({ code: 'BAD_REQUEST', message: 'No products in routine' })\n-  }\n-\n   const result = await generateRoutineAdvice(routine)\n   return result\n",
+    "files": {
+      "packages/db/schema/chat.ts": "import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'\n\nexport const chatMessages = pgTable('chat_messages', {\n  id: uuid('id').primaryKey().defaultRandom(),\n  userId: text('user_id').notNull(),\n  sessionId: text('session_id').notNull(),\n  role: text('role').notNull(),\n  content: text('content').notNull(),\n  createdAt: timestamp('created_at').defaultNow().notNull(),\n})\n",
+      "apps/server/src/routes/chat.ts": "import { Hono } from 'hono'\nimport { streamText } from 'ai'\nimport { gemini } from '@ai-sdk/google'\nimport { db } from '@pkg/db'\nimport { eq } from 'drizzle-orm'\nimport { chatMessages } from '@pkg/db/schema/chat'\n\nconst router = new Hono()\n\nrouter.post('/chat/send', async (c) => {\n  const { message, sessionId } = await c.req.json()\n  const userId = c.get('userId')\n\n  const history = await db.select().from(chatMessages)\n    .where(eq(chatMessages.sessionId, sessionId))\n    .orderBy(chatMessages.createdAt)\n\n  const stream = streamText({\n    model: gemini('gemini-2.5-flash'),\n    messages: [...history.map(m => ({ role: m.role, content: m.content })), { role: 'user', content: message }],\n    onFinish: async (result) => {\n      await db.insert(chatMessages).values([\n        { userId, sessionId, role: 'user', content: message },\n        { userId, sessionId, role: 'assistant', content: result.text },\n      ])\n    },\n  })\n  return stream.toDataStreamResponse()\n})\n\nexport default router\n",
+      "apps/native/src/hooks/use-ai-stream.ts": "import { useState, useCallback } from 'react'\n\nexport function useAiStream(sessionId: string) {\n  const [messages, setMessages] = useState([])\n  const [isStreaming, setIsStreaming] = useState(false)\n\n  const fetchHistory = async () => {\n    const res = await fetch(`/api/chat/history?sessionId=${sessionId}`)\n    return res.json()\n  }\n\n  const startStream = async (message: string) => {\n    fetchHistory()\n    setIsStreaming(true)\n    const response = await fetch('/api/chat/send', {\n      method: 'POST',\n      body: JSON.stringify({ message, sessionId }),\n    })\n    // ... stream handling\n    setIsStreaming(false)\n  }\n\n  return { messages, isStreaming, startStream }\n}\n",
+      "packages/api/src/routers/routine.ts": "import { TRPCError } from '@trpc/server'\nimport { generateRoutineAdvice } from '../services/routine-advisor'\n\nexport async function getRoutineAdvice(routine: any) {\n  const result = await generateRoutineAdvice(routine)\n  return result\n}\n"
+    },
+    "injected_bugs": [
+      {
+        "file": "packages/db/schema/chat.ts",
+        "line": 3,
+        "severity": "medium",
+        "category": "performance",
+        "title": "Missing DB indexes on chat_messages table",
+        "description": "chatMessages table has no index on sessionId or userId — queries filtering by sessionId will full-scan as data grows"
+      },
+      {
+        "file": "apps/server/src/routes/chat.ts",
+        "line": 23,
+        "severity": "high",
+        "category": "logic",
+        "title": "onFinish async callback not awaited — data loss risk",
+        "description": "streamText's onFinish callback is async but the stream response is already sent — if the DB insert fails, chat messages are silently lost"
+      },
+      {
+        "file": "apps/native/src/hooks/use-ai-stream.ts",
+        "line": 14,
+        "severity": "high",
+        "category": "logic",
+        "title": "fetchHistory() Promise not awaited — race condition",
+        "description": "fetchHistory() is called without await inside startStream — history fetch races with the stream, may cause stale data or memory leak"
+      },
+      {
+        "file": "packages/api/src/routers/routine.ts",
+        "line": 4,
+        "severity": "high",
+        "category": "logic",
+        "title": "Safety check removed from generate_routine",
+        "description": "Guard clause checking for empty routine/products was deleted — generateRoutineAdvice will now receive potentially invalid data"
+      }
+    ],
+    "known_false_positives": [
+      {
+        "title": "Date/pagination breaks",
+        "reason": "hallucination — getNextPageParam doesn't exist in source code, LLM inferred it from pattern"
+      },
+      {
+        "title": "Bug in unreachable code path",
+        "reason": "premature — reported bug in function with no callers in this PR"
+      }
+    ],
+    "known_false_negatives": [
+      { "title": "Missing DB indexes on chat_messages table" },
+      { "title": "onFinish async callback not awaited — data loss" },
+      { "title": "use-ai-stream Promise hang — memory leak" },
+      { "title": "Safety check removed from generate_routine" }
+    ]
+  }
+]
