@@ -5,13 +5,12 @@ import type { GitNexusTracerResult, TracedSymbol } from '../agent/gitnexus-trace
 describe('gitnexus-formatter', () => {
   const makeSymbol = (overrides?: Partial<TracedSymbol>): TracedSymbol => ({
     name: 'testFunc',
-    kind: 'function',
-    file: 'src/test.ts',
+    kind: 'Function',
     startLine: 10,
     endLine: 20,
     callers: [],
     callees: [],
-    impact: { files: 1, symbols: 1 },
+    impact: { files: 1, symbols: 1, processes: [] },
     participatedProcesses: [],
     routeImpact: [],
     shapeDrift: [],
@@ -22,7 +21,6 @@ describe('gitnexus-formatter', () => {
     status: 'ok',
     filePath: 'src/test.ts',
     symbols: [],
-    tracedAt: new Date().toISOString(),
     ...overrides,
   })
 
@@ -66,7 +64,6 @@ describe('gitnexus-formatter', () => {
       symbols: [
         makeSymbol({
           name: 'getUser',
-          file: 'src/api.ts',
           startLine: 50,
           endLine: 75,
           callers: [
@@ -77,7 +74,7 @@ describe('gitnexus-formatter', () => {
     })
     const output = formatGitNexusSection(result)
     expect(output).toContain('getUser')
-    expect(output).toContain('(function)')
+    expect(output).toContain('(Function)')
     expect(output).toContain('lines 50-75')
     expect(output).toContain('handler')
     expect(output).toContain('Callers (1)')
@@ -116,12 +113,15 @@ describe('gitnexus-formatter', () => {
         })),
         participatedProcesses: [
           {
+            id: `proc${i}`,
             label: `process${i}`,
-            processType: 'flow',
+            processType: 'intra_community',
             steps: Array.from({ length: 20 }, (_, k) => ({
               name: `step${k}`,
               file: `src/f.ts`,
               startLine: k,
+              endLine: k + 5,
+              stepIndex: k,
               isChangedSymbol: k === 0,
             })),
             stepCount: 20,
@@ -174,10 +174,11 @@ describe('gitnexus-formatter', () => {
         makeSymbol({
           participatedProcesses: [
             {
+              id: 'proc1',
               label: 'user login',
-              processType: 'flow',
+              processType: 'intra_community',
               steps: [
-                { name: 'validateCreds', file: 'src/auth.ts', startLine: 10, isChangedSymbol: true },
+                { name: 'validateCreds', file: 'src/auth.ts', startLine: 10, endLine: 15, stepIndex: 0, isChangedSymbol: true },
               ],
               stepCount: 1,
             },
@@ -197,10 +198,11 @@ describe('gitnexus-formatter', () => {
           callers: [{ name: 'myFunc', file: 'src/test.ts', line: 5 }],
           participatedProcesses: [
             {
+              id: 'proc1',
               label: 'flow1',
-              processType: 'call',
+              processType: 'intra_community',
               steps: [
-                { name: 'myFunc', file: 'src/test.ts', startLine: 10, isChangedSymbol: true },
+                { name: 'myFunc', file: 'src/test.ts', startLine: 10, endLine: 15, stepIndex: 0, isChangedSymbol: true },
               ],
               stepCount: 1,
             },
@@ -218,12 +220,15 @@ describe('gitnexus-formatter', () => {
         makeSymbol({
           participatedProcesses: [
             {
+              id: 'proc1',
               label: 'longProcess',
-              processType: 'flow',
+              processType: 'intra_community',
               steps: Array.from({ length: 15 }, (_, i) => ({
                 name: `step${i}`,
                 file: 'src/test.ts',
                 startLine: i,
+                endLine: i + 5,
+                stepIndex: i,
                 isChangedSymbol: false,
               })),
               stepCount: 15,

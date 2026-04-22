@@ -35,7 +35,7 @@ describe.skipIf(process.env.GITNEXUS_INTEGRATION !== '1')('gitnexus-integration'
 
     // If not skipped, symbols should have caller/callee info
     if (result.status === 'ok' && result.symbols.length > 0) {
-      const sym = result.symbols[0]
+      const sym = result.symbols[0]!
       expect(sym.name).toBeDefined()
       expect(sym.kind).toBeDefined()
       expect(Array.isArray(sym.callers)).toBe(true)
