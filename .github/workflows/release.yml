@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Version / Tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: Create Version PR or tag release
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          # When changesets detects pending .changeset/*.md entries, this opens a
+          # "Version Packages" PR. When that PR is merged (no entries remain),
+          # `publish` runs changeset:tag which creates + pushes the git tag.
+          version: bun run changeset:version
+          publish: bun run changeset:tag
+          commit: "chore(release): version packages"
+          title: "chore(release): version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # After tag push, create a GitHub Release with auto-generated notes
+      # based on CHANGELOG. Skipped when the action only opened a Version PR
+      # (no publish happened this run).
+      - name: Create GitHub Release
+        if: steps.changesets.outputs.published == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v${VERSION}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists, skipping."
+            exit 0
+          fi
+          # Extract the new version's CHANGELOG section as release notes
+          NOTES=$(awk -v ver="## [${VERSION}]" '
+            $0 ~ ver {found=1; next}
+            found && /^## \[/ {exit}
+            found {print}
+          ' CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="See [CHANGELOG.md](./CHANGELOG.md) for details."
+          fi
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes "$NOTES"

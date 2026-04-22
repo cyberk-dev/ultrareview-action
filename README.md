@@ -35,7 +35,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: cyberk-dev/ultrareview-action@872ca0ae2de61dc546056f908670cfc27ea4e9d1
+      - uses: cyberk-dev/ultrareview-action@v0.1.0
         with:
           ai-api-key: ${{ secrets.AI_API_KEY }}
 ```
@@ -136,3 +136,30 @@ Add to your repo's `.github/workflows/ultrareview.yml` (copy from this project).
 - Bun >= 1.0
 - Git (for diff operations)
 - GitHub CLI (`gh`) for PR review commands
+
+## Versioning
+
+Ultrareview follows [Semantic Versioning](https://semver.org/). Pin your workflow to a tagged release:
+
+```yaml
+- uses: cyberk-dev/ultrareview-action@v0.1.0   # recommended — pinned, reproducible
+# or: @main                                    # rolling, breakage possible
+# or: @<full-commit-sha>                       # maximally pinned, no auto-upgrade
+```
+
+- **v0.x.y** — pre-1.0. Minor bumps may include breaking changes; `CHANGELOG.md` flags them.
+- **v1.0.0 onward** — stable SemVer contract. Breaking changes only in major bumps.
+
+### Changelog
+
+All notable changes live in [`CHANGELOG.md`](./CHANGELOG.md). Each entry is authored per PR via [changesets](https://github.com/changesets/changesets) (`bun run changeset`) and auto-compiled at release time.
+
+### Contributor workflow
+
+1. Make your changes on a feature branch.
+2. Run `bun run changeset` — pick bump type (patch / minor / major), write a one-line summary.
+3. Commit `.changeset/<slug>.md` alongside your code.
+4. Open PR. On merge, a "Version Packages" PR is auto-opened.
+5. Maintainer merges the Version PR → release is tagged + published automatically.
+
+See [`.changeset/README.md`](./.changeset/README.md) for the tool details.

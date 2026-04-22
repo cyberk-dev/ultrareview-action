@@ -42,14 +42,21 @@ info "Detected repo: ${OWNER}/${REPO}"
 # ---------------------------------------------------------------------------
 # Get latest pinned SHA from ultrareview-action
 # ---------------------------------------------------------------------------
-info "Fetching latest ultrareview-action commit SHA..."
-ACTION_SHA=$(gh api repos/cyberk-dev/ultrareview-action/commits/main --jq '.sha' 2>/dev/null || echo "")
-if [[ -z "$ACTION_SHA" ]]; then
-  warn "Could not fetch latest SHA. Using 'main' (less secure)."
-  ACTION_REF="main"
+info "Fetching latest ultrareview-action release tag..."
+ACTION_TAG=$(gh api repos/cyberk-dev/ultrareview-action/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+if [[ -n "$ACTION_TAG" ]]; then
+  ACTION_REF="${ACTION_TAG}"
+  ok "Pinned to release: ${ACTION_TAG}"
 else
-  ACTION_REF="${ACTION_SHA}"
-  ok "Pinned to SHA: ${ACTION_SHA:0:12}..."
+  warn "No tagged release found. Falling back to latest commit SHA..."
+  ACTION_SHA=$(gh api repos/cyberk-dev/ultrareview-action/commits/main --jq '.sha' 2>/dev/null || echo "")
+  if [[ -z "$ACTION_SHA" ]]; then
+    warn "Could not fetch SHA either. Using 'main' (least secure)."
+    ACTION_REF="main"
+  else
+    ACTION_REF="${ACTION_SHA}"
+    ok "Pinned to SHA: ${ACTION_SHA:0:12}..."
+  fi
 fi
 
 # ---------------------------------------------------------------------------

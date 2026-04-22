@@ -1,9 +1,17 @@
 {
   "name": "ultrareview-clone",
+  "version": "0.1.0",
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:tag": "changeset tag && git push --follow-tags"
+  },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.6.0",
+    "@changesets/cli": "^2.31.0",
     "@types/bun": "latest",
     "@types/react": "^19.2.14"
   },

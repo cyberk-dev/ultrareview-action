@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: cyberk-dev/ultrareview-action@v1
+      - uses: cyberk-dev/ultrareview-action@v0.1.0  # pin to a tagged release
         with:
           ai-api-key: ${{ secrets.AI_API_KEY }}
           # Optional overrides:
