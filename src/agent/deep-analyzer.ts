@@ -64,8 +64,12 @@ function isValidBug(raw: unknown): raw is RawBug {
  * Analyze one changed file with full context.
  * Never throws — returns [] on any failure.
  */
-export async function analyzeFile(reviewFile: ReviewFile, additionalContext?: string): Promise<RawBug[]> {
-  const promptText = buildAnalyzerPrompt(reviewFile, additionalContext)
+export async function analyzeFile(
+  reviewFile: ReviewFile,
+  additionalContext?: string,
+  gitNexusSection?: string,
+): Promise<RawBug[]> {
+  const promptText = buildAnalyzerPrompt(reviewFile, additionalContext, gitNexusSection)
 
   // Use AI_ANALYSIS_MODEL by temporarily overriding env for this call
   const prevModel = process.env.AI_MODEL
@@ -111,13 +115,20 @@ export async function analyzeFile(reviewFile: ReviewFile, additionalContext?: st
 /**
  * Analyze all changed files in parallel (max MAX_CONCURRENCY at a time).
  * Partial failure is tolerated — failed files are skipped with a warning.
+ * gitNexusSections: optional per-file GitNexus IMPACT GRAPH sections keyed by file path.
  */
-export async function analyzeAllFiles(files: ReviewFile[], additionalContext?: string): Promise<RawBug[]> {
+export async function analyzeAllFiles(
+  files: ReviewFile[],
+  additionalContext?: string,
+  gitNexusSections?: Map<string, string>,
+): Promise<RawBug[]> {
   const allBugs: RawBug[] = []
 
   for (let i = 0; i < files.length; i += MAX_CONCURRENCY) {
     const batch = files.slice(i, i + MAX_CONCURRENCY)
-    const settled = await Promise.allSettled(batch.map((f) => analyzeFile(f, additionalContext)))
+    const settled = await Promise.allSettled(
+      batch.map((f) => analyzeFile(f, additionalContext, gitNexusSections?.get(f.diffFile.path))),
+    )
 
     for (let j = 0; j < settled.length; j++) {
       const outcome = settled[j]!

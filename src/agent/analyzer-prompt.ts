@@ -92,10 +92,14 @@ function truncate(text: string, maxChars: number): string {
 
 /**
  * Build the user message for the AI with full context.
- * Priority (highest to lowest): file content → diff hunks → imports → tests → callers.
+ * Priority (highest to lowest): file content → diff hunks → imports → tests → callers → impact graph.
  * Total output is capped at TOTAL_CHAR_BUDGET chars.
  */
-export function buildAnalyzerPrompt(reviewFile: ReviewFile, additionalContext?: string): string {
+export function buildAnalyzerPrompt(
+  reviewFile: ReviewFile,
+  additionalContext?: string,
+  gitNexusSection?: string,
+): string {
   const { diffFile, context } = reviewFile
   const sections: string[] = []
 
@@ -136,7 +140,13 @@ export function buildAnalyzerPrompt(reviewFile: ReviewFile, additionalContext?: 
     )
   }
 
-  // --- 6. Additional analysis context (async issues, schema issues, deletions) ---
+  // --- 6. GitNexus IMPACT GRAPH (callers, callees, process chains) ---
+  // Injected only when non-empty so existing prompt snapshots are unaffected.
+  if (gitNexusSection) {
+    sections.push(`## IMPACT GRAPH\n${gitNexusSection}`)
+  }
+
+  // --- 7. Additional analysis context (async issues, schema issues, deletions) ---
   if (additionalContext) {
     sections.push(`## ADDITIONAL ANALYSIS CONTEXT\n${additionalContext}`)
   }

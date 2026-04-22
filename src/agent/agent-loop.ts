@@ -13,12 +13,48 @@ import { filterBugs } from './filter.ts'
 import { traceAsyncIssues, formatAsyncContext } from './async-tracer.ts'
 import { analyzeSchema, formatSchemaContext } from './schema-analyzer.ts'
 import { detectDeletionRisks, formatDeletionContext } from './deletion-detector.ts'
+import { runGitNexusTracer } from './gitnexus-tracer.ts'
+import { formatGitNexusSection } from './gitnexus-formatter.ts'
 import type { FleetResult } from '../utils/mock-fleet.ts'
 
 type ProgressCallback = (step: string, detail: string) => void
 
 /** Max chars for additional context to avoid blowing prompt budget */
 const MAX_ADDITIONAL_CONTEXT_CHARS = 5_000
+
+// ---------------------------------------------------------------------------
+// Derive base/head git refs for the GitNexus tracer.
+// Falls back to MERGE_BASE..HEAD when no env override is provided.
+// Never throws — returns empty strings which will cause tracer to skip.
+// ---------------------------------------------------------------------------
+
+async function resolveGitRefs(repoRoot: string): Promise<{ baseRef: string; headRef: string }> {
+  // Allow explicit override for CI environments (e.g. GitHub Actions)
+  const baseEnv = process.env['GITNEXUS_BASE_REF']
+  const headEnv = process.env['GITNEXUS_HEAD_REF']
+  if (baseEnv && headEnv) return { baseRef: baseEnv, headRef: headEnv }
+
+  try {
+    const { $ } = await import('bun')
+    const head = (await $`git -C ${repoRoot} rev-parse HEAD`.quiet().text()).trim()
+    // Try merge-base with origin/main or origin/master; fall back to HEAD~1
+    let base = ''
+    for (const upstream of ['origin/main', 'origin/master', 'HEAD~1']) {
+      try {
+        base = (await $`git -C ${repoRoot} merge-base HEAD ${upstream}`.quiet().text()).trim()
+        if (base) break
+      } catch {
+        // try next
+      }
+    }
+    if (!base) base = `${head}~1`
+    return { baseRef: base, headRef: head }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.warn(`[agent-loop] Could not resolve git refs for GitNexus: ${msg}`)
+    return { baseRef: '', headRef: '' }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helper: wrap a step with progress reporting and error safety
@@ -105,24 +141,59 @@ export async function runAgentLoop(
     return { bugs: [], duration: Date.now() - start }
   }
 
-  // Step 2: Pre-analysis enrichment (parallel: async + schema + deletion)
-  const additionalContext = await runStep(
-    'pre-analysis',
-    'Running async tracer, schema analyzer, deletion detector',
-    onProgress,
-    buildAdditionalContext(files, repoRoot),
-    '',
-  )
+  // Step 2: Resolve git refs for GitNexus tracer (best-effort, never throws)
+  const { baseRef, headRef } = await resolveGitRefs(repoRoot)
+
+  // Step 3: Pre-analysis enrichment (parallel: async + schema + deletion + GitNexus per-file)
+  const [additionalContext, gitNexusSections] = await Promise.all([
+    runStep(
+      'pre-analysis',
+      'Running async tracer, schema analyzer, deletion detector',
+      onProgress,
+      buildAdditionalContext(files, repoRoot),
+      '',
+    ),
+    runStep(
+      'gitnexus',
+      `Tracing ${files.length} file(s) via GitNexus`,
+      onProgress,
+      async () => {
+        const map = new Map<string, string>()
+        if (!baseRef || !headRef) return map  // skip if refs unavailable
+
+        await Promise.allSettled(
+          files.map(async (f) => {
+            const result = await runGitNexusTracer({
+              filePath: f.diffFile.path,
+              baseRef,
+              headRef,
+              repoPath: repoRoot,
+            })
+            const section = formatGitNexusSection(result)
+            if (section) {
+              map.set(f.diffFile.path, section)
+              console.log(`[agent-loop] GitNexus IMPACT GRAPH for ${f.diffFile.path}: ${section.length} chars`)
+            }
+          }),
+        )
+        return map
+      },
+      new Map<string, string>(),
+    ),
+  ])
   if (additionalContext) {
     onProgress?.('pre-analysis', `Enriched context: ${additionalContext.length} chars`)
   }
+  if (gitNexusSections.size > 0) {
+    onProgress?.('gitnexus', `Impact graph built for ${gitNexusSections.size} file(s)`)
+  }
 
-  // Step 3: Deep-analyze each file for raw bugs (with enriched context)
+  // Step 4: Deep-analyze each file for raw bugs (with enriched context + impact graph)
   const rawBugs = await runStep(
     'analyzing',
     `Analyzing ${files.length} files for bugs`,
     onProgress,
-    () => analyzeAllFiles(files, additionalContext || undefined),
+    () => analyzeAllFiles(files, additionalContext || undefined, gitNexusSections),
     [],
   )
   onProgress?.('analyzing', `${rawBugs.length} raw bugs found`)
@@ -131,7 +202,7 @@ export async function runAgentLoop(
     return { bugs: [], duration: Date.now() - start }
   }
 
-  // Step 4: Classify bugs into 26-type taxonomy
+  // Step 5: Classify bugs into 26-type taxonomy
   const classifiedBugs = await runStep(
     'classifying',
     `Classifying ${rawBugs.length} bugs into taxonomy`,
@@ -141,7 +212,7 @@ export async function runAgentLoop(
   )
   onProgress?.('classifying', `${classifiedBugs.length} bugs classified`)
 
-  // Step 5: Verify each bug against actual source (deterministic, no AI)
+  // Step 6: Verify each bug against actual source (deterministic, no AI)
   const verifiedBugs = await runStep(
     'verifying',
     `Verifying ${classifiedBugs.length} bugs against source`,
@@ -154,7 +225,7 @@ export async function runAgentLoop(
   )
   onProgress?.('verifying', `${verifiedBugs.filter((b) => b.verified).length} verified real`)
 
-  // Step 6: Judge quality with separate model
+  // Step 7: Judge quality with separate model
   const judgedBugs = await runStep(
     'judging',
     `Scoring ${verifiedBugs.length} bugs with judge model`,
