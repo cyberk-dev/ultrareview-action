@@ -42,10 +42,56 @@ inputs:
     description: 'Enable self-improving feedback loop (saves review data for prompt optimization)'
     required: false
     default: 'true'
+  gitnexus-enabled:
+    description: 'Enable GitNexus code graph context (requires npx gitnexus in PATH)'
+    required: false
+    default: 'true'
+  gitnexus-secret-scan:
+    description: 'Scan .gitnexus/ index for leaked secrets after indexing (fails with warning, never blocks PR)'
+    required: false
+    default: 'true'
 
 runs:
   using: 'composite'
   steps:
+    - name: Cache GitNexus index
+      if: inputs.gitnexus-enabled == 'true'
+      uses: actions/cache@v4
+      with:
+        path: .gitnexus
+        # key: PR HEAD sha (stable per push on same PR); falls back to github.sha on push events
+        key: gitnexus-v1-${{ github.repository }}-${{ github.event.pull_request.head.sha || github.sha }}
+        restore-keys: |
+          gitnexus-v1-${{ github.repository }}-${{ github.base_ref }}-
+          gitnexus-v1-${{ github.repository }}-
+
+    - name: Index GitNexus (incremental)
+      if: inputs.gitnexus-enabled == 'true'
+      shell: bash
+      continue-on-error: true
+      run: |
+        # Warm run reuses cached .gitnexus/; cold run does full index (~1-5 min).
+        npx gitnexus analyze --incremental || {
+          echo "::warning::GitNexus index failed — ultrareview will run without graph context"
+          exit 0
+        }
+        echo "::notice::GitNexus index size: $(du -sh .gitnexus 2>/dev/null | cut -f1)"
+
+    - name: Scan GitNexus index for leaked secrets
+      if: inputs.gitnexus-enabled == 'true' && inputs.gitnexus-secret-scan == 'true'
+      shell: bash
+      continue-on-error: true
+      run: |
+        # Belt-and-suspenders check: warn if any indexed file contains secret-like patterns.
+        # Never blocks the PR — emits a warning annotation only.
+        if [ -d .gitnexus ]; then
+          HITS=$(grep -rl "API_KEY\|SECRET\|TOKEN\|PRIVATE_KEY" .gitnexus/ 2>/dev/null | head -5 || true)
+          if [ -n "$HITS" ]; then
+            echo "::warning::GitNexus index may contain secret-like patterns. Review these files:"
+            echo "$HITS" | while read -r f; do echo "::warning file=$f::Potential secret pattern found in GitNexus index"; done
+          fi
+        fi
+
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
       with:
@@ -73,3 +119,4 @@ runs:
         FEEDBACK_ENABLED: ${{ inputs.feedback }}
         FEEDBACK_DIR: ${{ github.action_path }}/benchmark/feedback
         GITHUB_EVENT_ACTION: ${{ github.event.action }}
+        GITNEXUS_ENABLED: ${{ inputs.gitnexus-enabled }}

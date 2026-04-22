@@ -51,8 +51,40 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # required for git diff base..head
           ref: ${{ steps.pr-ref.outputs.ref }}
+
+      - name: Cache GitNexus index
+        uses: actions/cache@v4
+        with:
+          path: .gitnexus
+          # key: PR HEAD sha (stable per push on same PR); falls back to github.sha on push events
+          key: gitnexus-v1-${{ github.repository }}-${{ github.event.pull_request.head.sha || github.sha }}
+          restore-keys: |
+            gitnexus-v1-${{ github.repository }}-${{ github.base_ref }}-
+            gitnexus-v1-${{ github.repository }}-
+
+      - name: Index GitNexus (incremental)
+        continue-on-error: true
+        run: |
+          # Warm run reuses cached .gitnexus/; cold run does full index (~1-5 min).
+          npx gitnexus analyze --incremental || {
+            echo "::warning::GitNexus index failed — ultrareview will run without graph context"
+            exit 0
+          }
+          echo "::notice::GitNexus index size: $(du -sh .gitnexus 2>/dev/null | cut -f1)"
+
+      - name: Scan GitNexus index for leaked secrets
+        continue-on-error: true
+        run: |
+          # Warn if indexed files contain secret-like patterns. Never blocks PR.
+          if [ -d .gitnexus ]; then
+            HITS=$(grep -rl "API_KEY\|SECRET\|TOKEN\|PRIVATE_KEY" .gitnexus/ 2>/dev/null | head -5 || true)
+            if [ -n "$HITS" ]; then
+              echo "::warning::GitNexus index may contain secret-like patterns. Review these files:"
+              echo "$HITS" | while read -r f; do echo "::warning file=$f::Potential secret pattern found"; done
+            fi
+          fi
 
       - uses: ./
         with:
@@ -63,3 +95,4 @@ jobs:
           classify-model: gpt-5.4-mini
         env:
           PR_NUMBER_OVERRIDE: ${{ github.event.issue.number }}
+          GITNEXUS_ENABLED: "true"

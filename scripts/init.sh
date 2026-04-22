@@ -90,12 +90,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Required for git diff base..head
+
+      # GitNexus cache — saves 1-5 min on warm runs by reusing the prior index.
+      # Cache key uses PR HEAD sha (stable per push within the same PR).
+      # Restore-keys ladder: exact -> same base branch -> same repo (broad fallback).
+      - name: Cache GitNexus index
+        uses: actions/cache@v4
+        with:
+          path: .gitnexus
+          key: gitnexus-v1-\${{ github.repository }}-\${{ github.event.pull_request.head.sha || github.sha }}
+          restore-keys: |
+            gitnexus-v1-\${{ github.repository }}-\${{ github.base_ref }}-
+            gitnexus-v1-\${{ github.repository }}-
+
+      # Incremental index: reuses cached .gitnexus/ on warm runs (<30s).
+      # Cold run performs full indexing (~1-5 min). Failure is non-fatal.
+      - name: Index GitNexus (incremental)
+        continue-on-error: true
+        run: |
+          npx gitnexus analyze --incremental || {
+            echo "::warning::GitNexus index failed — ultrareview will run without graph context"
+            exit 0
+          }
+          echo "::notice::GitNexus index size: \$(du -sh .gitnexus 2>/dev/null | cut -f1)"
+
+      # Warn if indexed files contain secret-like patterns. Never blocks PR.
+      - name: Scan GitNexus index for leaked secrets
+        continue-on-error: true
+        run: |
+          if [ -d .gitnexus ]; then
+            HITS=\$(grep -rl "API_KEY\|SECRET\|TOKEN\|PRIVATE_KEY" .gitnexus/ 2>/dev/null | head -5 || true)
+            if [ -n "\$HITS" ]; then
+              echo "::warning::GitNexus index may contain secret-like patterns. Review these files:"
+              echo "\$HITS" | while read -r f; do echo "::warning file=\$f::Potential secret pattern found"; done
+            fi
+          fi
 
       - uses: cyberk-dev/ultrareview-action@${ACTION_REF}
         with:
           ai-api-key: \${{ secrets.AI_API_KEY }}
           ai-base-url: \${{ secrets.AI_BASE_URL }}
+        env:
+          GITNEXUS_ENABLED: "true"
 YAML
 
 ok "Created ${WORKFLOW_FILE}"
