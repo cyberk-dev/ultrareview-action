@@ -132,3 +132,74 @@ export async function impact(
     return EMPTY_IMPACT
   }
 }
+
+// ---------------------------------------------------------------------------
+// Query — process/flow search
+// ---------------------------------------------------------------------------
+
+export interface QueryProcess {
+  id: string
+  name: string
+  process_type: string
+  entry_function: string
+  terminal_function: string
+  step_count: number
+}
+
+export interface QueryProcessSymbol {
+  id: string
+  process_id: string
+  name: string
+  file: string
+  start_line: number
+  end_line: number
+  step_index: number
+}
+
+export interface QueryDefinition {
+  id: string
+  name: string
+  kind: string
+  file: string
+  start_line: number
+  end_line: number
+}
+
+export interface QueryResult {
+  processes: QueryProcess[]
+  process_symbols: QueryProcessSymbol[]
+  definitions: QueryDefinition[]
+}
+
+const EMPTY_QUERY: QueryResult = { processes: [], process_symbols: [], definitions: [] }
+
+/**
+ * Search for processes/flows related to a concept or symbol name.
+ * Returns processes[], process_symbols[] (pre-sorted by step_index), definitions[].
+ * Returns empty sentinels on any error.
+ */
+export async function query(
+  repo: string,
+  concept: string,
+  contextText?: string,
+  limit = 5,
+): Promise<QueryResult> {
+  if (!isEnabled()) return EMPTY_QUERY
+  try {
+    const args = [concept, '--repo', repo, '--limit', String(limit)]
+    if (contextText) args.push('--context', contextText)
+    const raw = await runGitNexusJSON('query', args)
+    if (!raw || typeof raw !== 'object') return EMPTY_QUERY
+    const r = raw as Record<string, unknown>
+    return {
+      processes: Array.isArray(r['processes']) ? (r['processes'] as QueryProcess[]) : [],
+      process_symbols: Array.isArray(r['process_symbols'])
+        ? (r['process_symbols'] as QueryProcessSymbol[])
+        : [],
+      definitions: Array.isArray(r['definitions']) ? (r['definitions'] as QueryDefinition[]) : [],
+    }
+  } catch (err) {
+    console.warn('[gitnexus] query error:', err instanceof Error ? err.message : err)
+    return EMPTY_QUERY
+  }
+}
