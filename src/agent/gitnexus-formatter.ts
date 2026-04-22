@@ -53,7 +53,28 @@ function formatProcess(chain: ProcessChain, changedName: string): string {
 
 // -- Symbol formatting --
 
-interface RenderOpts { includeCallees: boolean; maxProcesses: number }
+interface RenderOpts {
+  includeCallees: boolean
+  maxProcesses: number
+  /** Phase-4 tier-1: include routeImpact/shapeDrift lines (dropped first on budget overflow) */
+  includeExtras: boolean
+}
+
+/** Render up to 2 route-impact lines (tier-1 — dropped first on budget overflow). */
+function formatRouteImpact(sym: TracedSymbol): string[] {
+  if (!sym.routeImpact || sym.routeImpact.length === 0) return []
+  return sym.routeImpact.slice(0, 2).map(
+    r => `    Route: ${sanitise(r.method)} ${sanitise(r.path)}`,
+  )
+}
+
+/** Render up to 2 shape-drift lines (tier-1 — dropped first on budget overflow). */
+function formatShapeDrift(sym: TracedSymbol): string[] {
+  if (!sym.shapeDrift || sym.shapeDrift.length === 0) return []
+  return sym.shapeDrift.slice(0, 2).map(
+    s => `    Shape drift: ${s.kind === 'add' ? '+' : s.kind === 'remove' ? '-' : '~'}field '${sanitise(s.field)}', ${sanitise(s.note)}`,
+  )
+}
 
 function formatSymbol(sym: TracedSymbol, opts: RenderOpts): string {
   const name = sanitise(sym.name)
@@ -73,6 +94,13 @@ function formatSymbol(sym: TracedSymbol, opts: RenderOpts): string {
   for (const chain of sym.participatedProcesses.slice(0, opts.maxProcesses)) {
     lines.push('', formatProcess(chain, name))
   }
+
+  // Phase-4 extras — rendered after Process lines, dropped first (tier-1) on overflow
+  if (opts.includeExtras) {
+    lines.push(...formatRouteImpact(sym))
+    lines.push(...formatShapeDrift(sym))
+  }
+
   return lines.join('\n')
 }
 
@@ -93,8 +121,8 @@ function renderWithOpts(symbols: TracedSymbol[], opts: RenderOpts, budget: numbe
 }
 
 /**
- * Tiered truncation per phase-03 spec. Drop order:
- * 1. Phase-4 signals (not present yet)
+ * Tiered truncation per phase-03 spec + phase-04 update. Drop order:
+ * 1. Phase-4 signals (routeImpact, shapeDrift) — dropped FIRST
  * 2. Process step elision (handled inside formatProcess)
  * 3. Drop 2nd process per symbol
  * 4. Drop callees
@@ -103,10 +131,13 @@ function renderWithOpts(symbols: TracedSymbol[], opts: RenderOpts, budget: numbe
 function truncateSymbols(symbols: TracedSymbol[], budget: number): { body: string; omitted: number } {
   const total = symbols.length
   const tiers: RenderOpts[] = [
-    { includeCallees: true,  maxProcesses: 2 },
-    { includeCallees: true,  maxProcesses: 1 },
-    { includeCallees: false, maxProcesses: 1 },
-    { includeCallees: false, maxProcesses: 0 },
+    // Tier 0: full output including phase-4 extras
+    { includeCallees: true,  maxProcesses: 2, includeExtras: true  },
+    // Tier 1: drop phase-4 extras first (route + shape lines)
+    { includeCallees: true,  maxProcesses: 2, includeExtras: false },
+    { includeCallees: true,  maxProcesses: 1, includeExtras: false },
+    { includeCallees: false, maxProcesses: 1, includeExtras: false },
+    { includeCallees: false, maxProcesses: 0, includeExtras: false },
   ]
   for (const opts of tiers) {
     const { text, included } = renderWithOpts(symbols, opts, budget)
@@ -116,7 +147,7 @@ function truncateSymbols(symbols: TracedSymbol[], budget: number): { body: strin
   // Nothing fits — render first symbol only, hard-slice to budget
   const first = symbols[0]
   if (!first) return { body: '', omitted: total }
-  return { body: formatSymbol(first, { includeCallees: false, maxProcesses: 0 }).slice(0, budget), omitted: total - 1 }
+  return { body: formatSymbol(first, { includeCallees: false, maxProcesses: 0, includeExtras: false }).slice(0, budget), omitted: total - 1 }
 }
 
 // -- Public API --

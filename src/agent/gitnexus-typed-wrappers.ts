@@ -2,6 +2,10 @@
 // GitNexus typed wrappers — high-level accessors for cypher/context/impact
 // All functions swallow errors and return empty sentinels (no throw).
 // Low-level core: see gitnexus-client.ts
+//
+// Phase 4 note: routeMap() and shapeCheck() are DEFERRED — gitnexus CLI does
+// not expose route_map / shape_check commands (MCP-only). Stubs return empty
+// sentinels and are annotated NOT_SUPPORTED. Track in .changeset/phase-04-defer.md.
 // ---------------------------------------------------------------------------
 
 import { isEnabled, runGitNexusJSON } from './gitnexus-client'
@@ -202,4 +206,52 @@ export async function query(
     console.warn('[gitnexus] query error:', err instanceof Error ? err.message : err)
     return EMPTY_QUERY
   }
+}
+
+// ---------------------------------------------------------------------------
+// Route map — NOT_SUPPORTED (CLI lacks route_map command; MCP-only)
+// DEFERRED: see .changeset/phase-04-defer.md
+// ---------------------------------------------------------------------------
+
+export interface RouteMapEntry {
+  method: string  // e.g. 'GET', 'POST'
+  path: string    // e.g. '/api/users/:id'
+  handler?: string
+}
+
+/**
+ * Fetch route map for a repo.
+ * DEFERRED — gitnexus CLI does not expose route_map (MCP-only tool).
+ * Always returns [] until promoted in a future phase.
+ */
+export async function routeMap(_repo: string): Promise<RouteMapEntry[]> {
+  // NOT_SUPPORTED: CLI lacks `gitnexus route_map`. Promote when MCP path added.
+  return []
+}
+
+// ---------------------------------------------------------------------------
+// Shape check — NOT_SUPPORTED (CLI lacks shape_check command; MCP-only)
+// DEFERRED: see .changeset/phase-04-defer.md
+// ---------------------------------------------------------------------------
+
+export type ShapeDriftKind = 'add' | 'remove' | 'modify'
+
+export interface ShapeDriftEntry {
+  kind: ShapeDriftKind
+  field: string
+  note: string
+}
+
+/**
+ * Compute shape drift between two refs for a repo.
+ * DEFERRED — gitnexus CLI does not expose shape_check (MCP-only tool).
+ * Always returns [] until promoted in a future phase.
+ */
+export async function shapeCheck(
+  _repo: string,
+  _baseRef: string,
+  _headRef: string,
+): Promise<ShapeDriftEntry[]> {
+  // NOT_SUPPORTED: CLI lacks `gitnexus shape_check`. Promote when MCP path added.
+  return []
 }

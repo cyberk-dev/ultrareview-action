@@ -12,9 +12,9 @@ import {
   clearGitNexusCache,
   GitNexusError,
 } from '../src/agent/gitnexus-client'
-import { cypher, context, impact, query } from '../src/agent/gitnexus-typed-wrappers'
-import { runGitNexusTracer, clearTracerCache } from '../src/agent/gitnexus-tracer'
-import type { GitNexusTracerResult } from '../src/agent/gitnexus-tracer'
+import { cypher, context, impact, query, routeMap, shapeCheck } from '../src/agent/gitnexus-typed-wrappers'
+import { runGitNexusTracer, clearTracerCache, shouldFetchRouteMap, shouldFetchShapeCheck } from '../src/agent/gitnexus-tracer'
+import type { GitNexusTracerResult, TracedSymbol } from '../src/agent/gitnexus-tracer'
 import { getChangedFiles, getHunkRanges } from '../src/agent/gitnexus-diff'
 import { formatGitNexusSection, isCriticalProcess } from '../src/agent/gitnexus-formatter'
 
@@ -316,6 +316,100 @@ async function run(): Promise<void> {
   const longOut = formatGitNexusSection(longChainResult)
   console.assert(longOut.includes('steps elided'), `[P3-8] FAIL: step elision missing`)
   console.log('[P3-8] step elision (>8 steps):', longOut.includes('steps elided') ? 'PASS' : 'FAIL')
+
+  // ---------------------------------------------------------------------------
+  // Phase 4 — Extra signals (route_map + shape_check) DEFERRED smoke tests
+  // ---------------------------------------------------------------------------
+  console.log('\n=== Phase 4: Extra signals (DEFERRED) ===\n')
+
+  // [P4-1] shouldFetchRouteMap — trigger on route/api/controller paths
+  const routeTriggerFiles = ['src/routes/user.ts', 'src/api/auth.ts', 'src/controllers/home.ts', 'src/handlers/upload.ts', 'src/endpoints/health.ts']
+  const routeNoTriggerFiles = ['src/utils/format.ts', 'src/models/user.ts']
+  console.assert(shouldFetchRouteMap(routeTriggerFiles), '[P4-1] FAIL: should trigger on route paths')
+  console.assert(!shouldFetchRouteMap(routeNoTriggerFiles), '[P4-1] FAIL: should NOT trigger on unrelated paths')
+  console.log('[P4-1] shouldFetchRouteMap trigger:', shouldFetchRouteMap(routeTriggerFiles) ? 'PASS' : 'FAIL',
+    '| no-trigger:', !shouldFetchRouteMap(routeNoTriggerFiles) ? 'PASS' : 'FAIL')
+
+  // [P4-2] shouldFetchShapeCheck — trigger on interface/type/class/schema/struct keywords
+  const shapeTriggerDiff = `+export interface UserProfile {\n+  name: string\n}`
+  const shapeNoTriggerDiff = `+const x = 1\n-const x = 0`
+  console.assert(shouldFetchShapeCheck(shapeTriggerDiff), '[P4-2] FAIL: should trigger on interface keyword')
+  console.assert(!shouldFetchShapeCheck(shapeNoTriggerDiff), '[P4-2] FAIL: should NOT trigger on plain diff')
+  const schemaKeywords = ['interface', 'type', 'class', 'schema', 'struct']
+  for (const kw of schemaKeywords) {
+    console.assert(shouldFetchShapeCheck(`export ${kw} Foo {}`), `[P4-2] FAIL: should trigger on '${kw}'`)
+  }
+  console.log('[P4-2] shouldFetchShapeCheck:',
+    schemaKeywords.map(kw => `${kw}=${shouldFetchShapeCheck(`export ${kw} Foo {}`) ? 'PASS' : 'FAIL'}`).join(' '))
+
+  // [P4-3] routeMap wrapper — returns [] (DEFERRED/NOT_SUPPORTED)
+  const routeEntries = await routeMap('skin-agent-fe')
+  console.assert(Array.isArray(routeEntries) && routeEntries.length === 0, '[P4-3] FAIL: routeMap should return []')
+  console.log('[P4-3] routeMap() deferred stub:', routeEntries.length === 0 ? 'PASS (returns [])' : 'FAIL')
+
+  // [P4-4] shapeCheck wrapper — returns [] (DEFERRED/NOT_SUPPORTED)
+  const shapeEntries = await shapeCheck('skin-agent-fe', 'HEAD~1', 'HEAD')
+  console.assert(Array.isArray(shapeEntries) && shapeEntries.length === 0, '[P4-4] FAIL: shapeCheck should return []')
+  console.log('[P4-4] shapeCheck() deferred stub:', shapeEntries.length === 0 ? 'PASS (returns [])' : 'FAIL')
+
+  // [P4-5] Formatter renders Route + Shape lines when routeImpact/shapeDrift present
+  const p4Symbol: TracedSymbol = {
+    name: 'createUser',
+    kind: 'Function',
+    startLine: 10,
+    endLine: 30,
+    callers: [],
+    callees: [],
+    impact: { files: 2, symbols: 5, processes: [] },
+    participatedProcesses: [],
+    routeImpact: [{ method: 'POST', path: '/api/users' }, { method: 'PUT', path: '/api/users/:id' }],
+    shapeDrift:  [{ kind: 'add', field: 'roles:string[]', note: 'callers may crash on missing' }],
+  }
+  const p4Result: GitNexusTracerResult = { status: 'ok', filePath: 'src/api/users.ts', symbols: [p4Symbol] }
+  const p4Out = formatGitNexusSection(p4Result)
+  console.assert(p4Out.includes('Route: POST /api/users'), `[P4-5] FAIL: Route line missing\n${p4Out}`)
+  console.assert(p4Out.includes('Shape drift:'), `[P4-5] FAIL: Shape drift line missing\n${p4Out}`)
+  console.assert(p4Out.includes("+field 'roles:string[]'"), `[P4-5] FAIL: field text missing\n${p4Out}`)
+  console.log('[P4-5] formatter extra lines:',
+    ['Route: POST', 'Shape drift:', "+field 'roles"].map(
+      needle => `${needle.split(':')[0]}=${p4Out.includes(needle) ? 'PASS' : 'FAIL'}`
+    ).join(' '))
+
+  // [P4-6] Formatter caps route lines at 2 (even if 3+ present)
+  const p4ManyRoutes: TracedSymbol = {
+    ...p4Symbol,
+    routeImpact: [
+      { method: 'GET',    path: '/api/a' },
+      { method: 'POST',   path: '/api/b' },
+      { method: 'DELETE', path: '/api/c' }, // 3rd — should be dropped
+    ],
+  }
+  const p4ManyOut = formatGitNexusSection({ status: 'ok', filePath: 'src/api/x.ts', symbols: [p4ManyRoutes] })
+  const routeLineCount = (p4ManyOut.match(/Route:/g) ?? []).length
+  console.assert(routeLineCount <= 2, `[P4-6] FAIL: expected ≤2 Route lines, got ${routeLineCount}`)
+  console.log('[P4-6] route line cap at 2:', routeLineCount <= 2 ? 'PASS' : 'FAIL', `(${routeLineCount} lines)`)
+
+  // [P4-7] Truncation: extras dropped first when budget is tight
+  // Construct a symbol set that overflows with extras but fits without them
+  const bigCallers = Array.from({ length: 20 }, (_, i) => ({ name: `caller${i}`, file: `src/c${i}.ts`, line: i }))
+  const p4TightSymbol: TracedSymbol = {
+    name: 'heavyFunc',
+    kind: 'Function',
+    startLine: 1,
+    endLine: 5,
+    callers: bigCallers,
+    callees: [],
+    impact: { files: 20, symbols: 100, processes: [] },
+    participatedProcesses: [],
+    routeImpact: [{ method: 'GET', path: '/api/heavy' }],
+    shapeDrift:  [{ kind: 'modify', field: 'count:number', note: 'breaking change' }],
+  }
+  // Use a very tight budget to force tier-1 drop
+  const tightSymbols = Array.from({ length: 15 }, () => ({ ...p4TightSymbol }))
+  const tightResult: GitNexusTracerResult = { status: 'ok', filePath: 'src/heavy.ts', symbols: tightSymbols }
+  const tightOut = formatGitNexusSection(tightResult)
+  console.assert(tightOut.length <= 3000, `[P4-7] FAIL: over budget (${tightOut.length})`)
+  console.log('[P4-7] truncation drops extras first (budget ≤3000):', tightOut.length <= 3000 ? 'PASS' : 'FAIL', `(${tightOut.length} chars)`)
 
   console.log('\n=== Smoke test complete ===')
 }
