@@ -11,7 +11,7 @@ permissions:
 jobs:
   review:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 60  # allow headroom for cold GitNexus index + large PRs
     steps:
       - uses: actions/checkout@v4
         with:

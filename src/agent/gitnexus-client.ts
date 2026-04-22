@@ -4,7 +4,7 @@
  */
 
 // GitNexus CLI client — low-level subprocess wrapper + health check
-// Env: GITNEXUS_ENABLED (default true), GITNEXUS_BIN (default "gitnexus"), GITNEXUS_TIMEOUT_MS (default 10000)
+// Env: GITNEXUS_ENABLED (default true), GITNEXUS_BIN (default "gitnexus"), GITNEXUS_TIMEOUT_MS (default 30000)
 // Typed wrappers (cypher/context/impact): gitnexus-typed-wrappers.ts
 
 import { execFile as execFileCallback } from 'node:child_process'
@@ -16,7 +16,7 @@ const execFile = promisify(execFileCallback)
 
 export function isEnabled(): boolean { return (process.env.GITNEXUS_ENABLED ?? 'true') !== 'false' }
 export function getBinName(): string { return process.env.GITNEXUS_BIN ?? 'gitnexus' }
-export function getTimeoutMs(): number { return parseInt(process.env.GITNEXUS_TIMEOUT_MS ?? '10000', 10) }
+export function getTimeoutMs(): number { return parseInt(process.env.GITNEXUS_TIMEOUT_MS ?? '30000', 10) }
 
 // -- Error types --
 

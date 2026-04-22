@@ -6,7 +6,7 @@
 // gitnexus-tracer.ts — orchestrates changed-symbol derivation + parallel fan-out
 // Entry: runGitNexusTracer({ filePath, diff, baseRef, headRef, repoPath })
 // Cache: module-level Map keyed by "base..head@repoPath"
-// Budget: GITNEXUS_TRACER_BUDGET_MS (default 15000ms) via Promise.race
+// Budget: GITNEXUS_TRACER_BUDGET_MS (default 45000ms) via Promise.race
 
 import { isGitNexusAvailable, resolveRepoName } from './gitnexus-client'
 import { cypher } from './gitnexus-typed-wrappers'
@@ -18,7 +18,7 @@ import type { CachedSymbol } from './gitnexus-symbol-fan-out'
 // -- Env config --
 
 function getBudgetMs(): number {
-  return parseInt(process.env['GITNEXUS_TRACER_BUDGET_MS'] ?? '15000', 10)
+  return parseInt(process.env['GITNEXUS_TRACER_BUDGET_MS'] ?? '45000', 10)
 }
 function getMaxSymbolsPerFile(): number {
   return parseInt(process.env['GITNEXUS_MAX_SYMBOLS_PER_FILE'] ?? '10', 10)

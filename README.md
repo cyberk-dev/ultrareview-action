@@ -153,11 +153,11 @@ gitnexus list                       # Verify: should show symbols
 |----------|---------|---------|
 | `GITNEXUS_ENABLED` | `true` | Enable/disable graph features (gracefully skips if binary missing) |
 | `GITNEXUS_BIN` | `gitnexus` | Path to GitNexus CLI binary |
-| `GITNEXUS_TIMEOUT_MS` | `10000` | Max time per CLI call; increase on slow networks |
+| `GITNEXUS_TIMEOUT_MS` | `30000` | Max time per CLI call; increase for monorepos with large graphs |
 | `GITNEXUS_CALLERS_DEPTH` | `1` | How many hops up the call graph to fetch |
 | `GITNEXUS_CALLEES_DEPTH` | `1` | How many hops down the call graph to fetch |
 | `GITNEXUS_MAX_SYMBOLS_PER_FILE` | `10` | Max symbols per file in impact graph (limits prompt size) |
-| `GITNEXUS_TRACER_BUDGET_MS` | `15000` | Total time budget for all symbol tracing per run |
+| `GITNEXUS_TRACER_BUDGET_MS` | `45000` | Total time budget per-file for all symbol tracing (fan-out across context/impact/query) |
 
 ### Action Inputs
 
