@@ -1,3 +1,8 @@
+/**
+ * Low-level GitNexus CLI wrapper. Errors map to GitNexusError.code: NOT_INSTALLED | NOT_INDEXED |
+ * TIMEOUT | PARSE_ERROR | EXIT_NONZERO | MULTI_REPO_AMBIGUOUS. Supports graceful skip via env flag.
+ */
+
 // GitNexus CLI client — low-level subprocess wrapper + health check
 // Env: GITNEXUS_ENABLED (default true), GITNEXUS_BIN (default "gitnexus"), GITNEXUS_TIMEOUT_MS (default 10000)
 // Typed wrappers (cypher/context/impact): gitnexus-typed-wrappers.ts

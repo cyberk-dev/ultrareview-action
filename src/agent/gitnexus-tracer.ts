@@ -1,3 +1,8 @@
+/**
+ * Derives changed symbols from git diff + GitNexus Cypher; fetches callers, callees, impact,
+ * and end-to-end process chains. Returns `{status: 'skipped'}` on any error for graceful degradation.
+ */
+
 // gitnexus-tracer.ts — orchestrates changed-symbol derivation + parallel fan-out
 // Entry: runGitNexusTracer({ filePath, diff, baseRef, headRef, repoPath })
 // Cache: module-level Map keyed by "base..head@repoPath"

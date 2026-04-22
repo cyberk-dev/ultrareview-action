@@ -131,11 +131,85 @@ Add to your repo's `.github/workflows/ultrareview.yml` (copy from this project).
 - Classification: `gpt-5.4-mini` (fast taxonomy)
 - Judge: `gpt-5.2` (separate model, avoids self-scoring bias)
 
+## GitNexus Integration (Optional)
+
+GitNexus adds graph-based code context beyond diff/grep: callers, callees, impact radius, and end-to-end process chains. This helps the AI understand semantic relationships and catch bugs in code flows.
+
+### Setup
+
+**Local development:**
+```bash
+npm install -g gitnexus
+cd /path/to/your/repo
+gitnexus analyze                    # Index repo (1-5 min on cold run)
+gitnexus list                       # Verify: should show symbols
+```
+
+**CI:** Cache is automatic via `actions/cache@v4` in the action. Subsequent runs reuse the index (warm run <30s).
+
+### Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `GITNEXUS_ENABLED` | `true` | Enable/disable graph features (gracefully skips if binary missing) |
+| `GITNEXUS_BIN` | `gitnexus` | Path to GitNexus CLI binary |
+| `GITNEXUS_TIMEOUT_MS` | `10000` | Max time per CLI call; increase on slow networks |
+| `GITNEXUS_CALLERS_DEPTH` | `1` | How many hops up the call graph to fetch |
+| `GITNEXUS_CALLEES_DEPTH` | `1` | How many hops down the call graph to fetch |
+| `GITNEXUS_MAX_SYMBOLS_PER_FILE` | `10` | Max symbols per file in impact graph (limits prompt size) |
+| `GITNEXUS_TRACER_BUDGET_MS` | `15000` | Total time budget for all symbol tracing per run |
+
+### Action Inputs
+
+```yaml
+- uses: cyberk-dev/ultrareview-action@v0.1.0
+  with:
+    ai-api-key: ${{ secrets.AI_API_KEY }}
+    gitnexus-enabled: 'true'          # Enable graph context (default)
+    gitnexus-secret-scan: 'true'      # Warn if index contains secret patterns
+```
+
+### Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| `NOT_INSTALLED` | Run `npm install -g gitnexus` and verify `gitnexus --version` works |
+| `NOT_INDEXED` | Run `gitnexus analyze` in repo root to create `.gitnexus/` index |
+| `TIMEOUT` | Increase `GITNEXUS_TIMEOUT_MS` env var (default 10s); check if CLI is slow |
+| Shallow clone in CI | Ensure `actions/checkout@v4` has `fetch-depth: 0` for full history |
+| Cache miss on new branch | First run slow (1-5 min), subsequent runs warm from cache |
+| `MULTI_REPO_AMBIGUOUS` | Rare; indicates global gitnexus registry has >1 repo with same path — use `GITNEXUS_ENABLED=false` as workaround |
+
+### Example Output
+
+When enabled, the AI sees an `IMPACT GRAPH` section in the prompt:
+
+```
+=== IMPACT GRAPH (GitNexus) ===
+File: src/auth/login.ts
+Changed symbols: 2
+
+  validatePassword (Function) [lines 45-62]
+    Callers (3): handleLogin (src/auth/handlers.ts:20), loginEndpoint (src/api/routes.ts:88)
+    Callees (2): bcrypt.compare, logger.debug
+    Impact: 7 files, 24 symbols
+
+    Process: "handleLogin → redirectToHome" (5 steps, critical path)
+      1. handleLogin (src/auth/handlers.ts:20)
+      2. authenticate (src/auth/auth.ts:10)
+      3. validatePassword    ← CHANGED
+      4. setSession (src/session/manager.ts:55)
+      5. redirectToHome (src/auth/handlers.ts:45)
+
+=== 
+```
+
 ## Requirements
 
 - Bun >= 1.0
 - Git (for diff operations)
 - GitHub CLI (`gh`) for PR review commands
+- GitNexus CLI (optional, for enhanced graph-based context)
 
 ## Versioning
 
