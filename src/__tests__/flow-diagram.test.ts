@@ -1,6 +1,7 @@
 import { test, expect, describe, beforeEach, afterEach } from 'bun:test'
 import {
   buildPrompt,
+  getTimeoutMs,
   synthesizeFlowDiagram,
   validateMermaid,
   type FlowDiagramInput,
@@ -109,13 +110,13 @@ describe('buildPrompt', () => {
     expect(user).toMatch(/Verified bugs.*\n\(none\)/s)
   })
 
-  test('truncates IMPACT GRAPH to 3K char budget', () => {
+  test('truncates IMPACT GRAPH to 1.5K char budget (v0.3.2)', () => {
     const huge = 'X'.repeat(10_000)
     const { user } = buildPrompt({
       ...MIN_INPUT,
       gitNexusSections: new Map([['big.ts', huge]]),
     })
-    expect(user.length).toBeLessThan(5_000)
+    expect(user.length).toBeLessThan(2_500)
     expect(user).toContain('truncated')
   })
 
@@ -187,6 +188,26 @@ describe('synthesizeFlowDiagram — graceful skip + happy path', () => {
     expect(out).not.toBe('')
     expect(out).toContain('flowchart TD')
     expect(out.startsWith('```mermaid')).toBe(true)
+  })
+
+  test('honors INTENT_FLOW_TIMEOUT_MS env (v0.3.2)', () => {
+    const prev = process.env['INTENT_FLOW_TIMEOUT_MS']
+    try {
+      delete process.env['INTENT_FLOW_TIMEOUT_MS']
+      expect(getTimeoutMs()).toBe(60_000)  // default
+
+      process.env['INTENT_FLOW_TIMEOUT_MS'] = '120000'
+      expect(getTimeoutMs()).toBe(120_000)
+
+      process.env['INTENT_FLOW_TIMEOUT_MS'] = 'not-a-number'
+      expect(getTimeoutMs()).toBe(60_000)  // fallback
+
+      process.env['INTENT_FLOW_TIMEOUT_MS'] = '0'
+      expect(getTimeoutMs()).toBe(60_000)  // reject non-positive
+    } finally {
+      if (prev == null) delete process.env['INTENT_FLOW_TIMEOUT_MS']
+      else process.env['INTENT_FLOW_TIMEOUT_MS'] = prev
+    }
   })
 
   test('honors AI_FLOW_MODEL env override during chat', async () => {
