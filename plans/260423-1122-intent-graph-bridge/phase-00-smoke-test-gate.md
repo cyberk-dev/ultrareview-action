@@ -7,7 +7,7 @@
 
 ## Overview
 - **Priority**: P0 (BLOCKS plan)
-- **Status**: pending
+- **Status**: completed
 - **Effort**: S (≤30 min)
 - **Description**: Manually validate that GitNexus query results actually surface useful spec/doc files for real PR diffs. KILL the plan if signal too weak.
 
@@ -52,13 +52,13 @@ Answers feed Phase 1 design.
 5. Apply decision gate.
 
 ## Todo List
-- [ ] Verify GitNexus index covers ultrareview-clone scope
-- [ ] Pick 3 representative PRs
-- [ ] Run graph queries per PR; capture output
-- [ ] Score each PR (positive / negative / unclear)
-- [ ] Write smoke test report
-- [ ] Apply gate: KILL or PROCEED to Phase 1
-- [ ] If KILL: update plan.md status to `cancelled`
+- [x] Verify GitNexus index covers ultrareview-clone scope
+- [x] Pick 3 representative PRs
+- [x] Run graph queries per PR; capture output
+- [x] Score each PR (positive / negative / unclear)
+- [x] Write smoke test report
+- [x] Apply gate: KILL or PROCEED to Phase 1 → PROCEED (1/3 positive)
+- [x] Design pivot documented (keyword search via gitnexus_query, not graph-walk)
 
 ## Success Criteria
 - Smoke test report saved at `./reports/smoke-test-260423-graph-bridge.md`

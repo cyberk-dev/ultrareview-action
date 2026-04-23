@@ -108,3 +108,11 @@ These are pre-impl experiments handled in Phase 0 — answers feed Phase 1 desig
 ## Release Flow
 
 Same as v0.3.0: `./scripts/prepare-release.sh` (already exists from v0.3.0 phase 7).
+
+## Sync-back (2026-04-23)
+
+**Completed Phases:** 0–4 (gate pass, code, merge, docs)  
+**Phase 5 (release):** Deferred until feature PR https://github.com/cyberk-dev/ultrareview-action/pull/3 merged  
+**Test Result:** 216 pass / 3 skip / 0 fail (+11 new tests)  
+**Design Outcome:** Graph-walk hypothesis disproved; mechanism = keyword search via `gitnexus_query` over indexed markdown nodes  
+**Key Artifacts:** intent-from-graph.ts (~80 LOC), 1 changeset (minor v0.4.0 bump), README addendum

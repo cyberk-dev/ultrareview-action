@@ -16,6 +16,7 @@ import { detectDeletionRisks, formatDeletionContext } from './deletion-detector.
 import { runGitNexusTracer } from './gitnexus-tracer.ts'
 import { formatGitNexusSection } from './gitnexus-formatter.ts'
 import { collectIntent } from './intent-collector.ts'
+import { synthesizeFlowDiagram } from './flow-diagram.ts'
 import type { FleetResult } from '../utils/mock-fleet.ts'
 
 type ProgressCallback = (step: string, detail: string) => void
@@ -249,7 +250,32 @@ export async function runAgentLoop(
   )
   onProgress?.('judging', `${judgedBugs.length} bugs scored`)
 
-  // Step 7: Filter low-quality bugs and convert to final type
+  // Step 7.5: Synthesize Mermaid flow diagram (one cheap LLM call per review)
+  // Uses verified bugs (post-judge) so the diagram can highlight real issues only.
+  const flowDiagram = await runStep(
+    'flow-diagram',
+    'Generating Mermaid flow summary',
+    onProgress,
+    () => synthesizeFlowDiagram({
+      changedFiles: files.map((f) => f.diffFile.path),
+      gitNexusSections,
+      intentSection: intentSection || undefined,
+      verifiedBugs: judgedBugs
+        .filter((b) => b.verified && b.line != null)
+        .map((b) => ({
+          file: b.file,
+          line: b.line as number,
+          title: b.title,
+          severity: b.severity,
+        })),
+    }),
+    '',
+  )
+  if (flowDiagram) {
+    onProgress?.('flow-diagram', `Diagram ready (${flowDiagram.length} chars)`)
+  }
+
+  // Step 8: Filter low-quality bugs and convert to final type
   const finalBugs = await runStep(
     'filtering',
     'Filtering low-confidence bugs',
@@ -261,5 +287,5 @@ export async function runAgentLoop(
   const duration = Date.now() - start
   onProgress?.('done', `${finalBugs.length} high-quality bugs in ${duration}ms`)
 
-  return { bugs: finalBugs, duration }
+  return { bugs: finalBugs, duration, flowDiagram: flowDiagram || undefined }
 }

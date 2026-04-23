@@ -311,6 +311,24 @@ The bridge merges with diff-detected specs and is deduped — diff-detected alwa
 
 **Hit-rate caveat:** the bridge only fires when (a) a related plan/doc actually exists and (b) the PR title or changed file/symbol names overlap with its vocabulary. Chore-style fixes with no associated plan see no value-add (graceful skip). Real-world hit rate observed during Phase 0 smoke test: ~33% on 3 PRs. Tune `INTENT_GRAPH_MAX_SPECS` upward only after measuring noise on your corpus.
 
+### Flow diagram (since v0.3.1)
+
+When enabled, ultrareview asks a cheap LLM to draw a Mermaid `flowchart TD` summarizing the code paths it analyzed. The diagram appears at the **top** of the PR review summary in a collapsed `<details>` block — reviewer + author can verify the bot's interpretation in one glance, before reading the bug list.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `INTENT_FLOW_DIAGRAM` | `true` | Opt-out switch |
+| `AI_FLOW_MODEL` | `gpt-5.4-mini` | Cheap model for diagram synthesis (swap to `kimi-k2.5` / `glm-5` / `qwen3.5-plus` to experiment) |
+| `INTENT_FLOW_MAX_NODES` | `10` | Cap diagram complexity for readability |
+
+**Cost & latency** (per PR, default model on cyberk proxy):
+- Cost: ~$0.0001 / PR
+- Added latency: ~7-10s (one extra LLM call per review)
+
+**Caveat:** the diagram is the bot's *interpretation*, not ground truth. Always verify against actual code before trusting bug analysis. The collapsed `<details>` block includes this caveat inline.
+
+**Smoke-test note** (April 2026): on `ai-proxy.cyberk.io`, `kimi-k2.5` showed ~15× prompt-token overhead from cliproxy-injected context, making it 7-8× more expensive AND ~1.7× slower than `gpt-5.4-mini` for this task. Default chosen accordingly. If your proxy doesn't have this overhead, swap freely.
+
 ## Requirements
 
 - Bun >= 1.0

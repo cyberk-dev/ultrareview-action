@@ -44,7 +44,7 @@ function buildBody(messages: Message[], opts: ChatOptions, stream: boolean) {
 
   if (AI_FORMAT === 'anthropic') {
     return {
-      model: AI_MODEL,
+      model: process.env.AI_MODEL ?? AI_MODEL,
       max_tokens: opts.maxTokens ?? 4096,
       messages: filtered,
       ...(stream ? { stream: true } : {}),

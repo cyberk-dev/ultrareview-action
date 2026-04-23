@@ -168,6 +168,7 @@ async function handleUltrareview(args: string, opts: NonInteractiveOptions = {})
         bugs: result.bugs,
         diffText,
         duration: result.duration,
+        flowDiagram: result.flowDiagram,
       })
       console.log(`[GitHub] Posted review with ${commentCount} line comment(s).`)
     } catch (err) {

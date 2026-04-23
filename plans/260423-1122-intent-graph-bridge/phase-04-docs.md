@@ -6,7 +6,7 @@
 
 ## Overview
 - **Priority**: P1
-- **Status**: pending
+- **Status**: completed
 - **Effort**: S (<1h)
 
 ## Requirements
@@ -56,10 +56,10 @@ Knobs:
 3. Write changeset (minor bump).
 
 ## Todo List
-- [ ] README graph-bridge subsection
-- [ ] Env var table additions (3 new vars)
-- [ ] JSDoc on `intent-from-graph.ts`
-- [ ] `.changeset/intent-graph-bridge.md`
+- [x] README graph-bridge subsection
+- [x] Env var table additions (3 new vars)
+- [x] JSDoc on `intent-from-graph.ts`
+- [x] `.changeset/intent-graph-bridge.md`
 
 ## Success Criteria
 - Reader can enable/disable graph bridge from README alone

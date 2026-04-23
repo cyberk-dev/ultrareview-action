@@ -54,6 +54,10 @@ inputs:
     description: 'Enable Intent injection: inject PR title/body and classified spec files (OpenSpec, CK-Plan, docs) at the top of the analyzer prompt'
     required: false
     default: 'true'
+  flow-diagram-enabled:
+    description: 'Embed a Mermaid flowchart of the bot''s understanding at the top of the PR review summary (one extra cheap LLM call per PR)'
+    required: false
+    default: 'true'
 
 runs:
   using: 'composite'
@@ -125,3 +129,4 @@ runs:
         GITHUB_EVENT_ACTION: ${{ github.event.action }}
         GITNEXUS_ENABLED: ${{ inputs.gitnexus-enabled }}
         INTENT_ENABLED: ${{ inputs.intent-enabled }}
+        INTENT_FLOW_DIAGRAM: ${{ inputs.flow-diagram-enabled }}
