@@ -15,7 +15,7 @@ This pivot changes the implementation but NOT the user-facing contract. Module n
 
 ## Overview
 - **Priority**: P0
-- **Status**: pending (blocked by Phase 0 gate)
+- **Status**: completed
 - **Effort**: S (<2h)
 - **Description**: New module `intent-from-graph.ts` that takes diff context, queries GitNexus, harvests spec/doc paths, and returns `SpecFileEntry[]` ready for the existing extractor pipeline.
 
@@ -85,15 +85,15 @@ The GitNexus client invocation should reuse the existing client from `src/agent/
 7. Create `.changeset/intent-graph-bridge.md` (minor bump v0.4.0).
 
 ## Todo List
-- [ ] Read GitNexus typed wrappers, pick API
-- [ ] `deriveQueryFromDiff` helper
-- [ ] `collectSpecsFromGraph` main entry
-- [ ] Env switch `INTENT_GRAPH_BRIDGE`
-- [ ] Filter chain (scan-paths, excluded list, dedupe, cap)
-- [ ] Classify + downgrade confidence to 0.5
-- [ ] Graceful error handling (warn + return [])
-- [ ] TypeScript compile clean
-- [ ] Create `.changeset/intent-graph-bridge.md` (minor)
+- [x] Read GitNexus typed wrappers, pick API
+- [x] `deriveQueryFromDiff` helper
+- [x] `collectSpecsFromGraph` main entry
+- [x] Env switch `INTENT_GRAPH_BRIDGE`
+- [x] Filter chain (scan-paths, excluded list, dedupe, cap)
+- [x] Classify + downgrade confidence to 0.5
+- [x] Graceful error handling (warn + return [])
+- [x] TypeScript compile clean
+- [x] Create `.changeset/intent-graph-bridge.md` (minor)
 
 ## Success Criteria
 - Returns non-empty array on a known-good test PR (Phase 0 output)
