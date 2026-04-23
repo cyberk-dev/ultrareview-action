@@ -1,5 +1,5 @@
 import { test, expect, describe } from 'bun:test'
-import { buildReviewSummary, buildFlowDiagramBlock } from '../github/pr-comments'
+import { buildLgtmBody, buildReviewSummary, buildFlowDiagramBlock } from '../github/pr-comments'
 import type { Bug } from '../utils/mock-fleet'
 
 const SAMPLE_BUG: Bug = {
@@ -54,5 +54,29 @@ describe('buildReviewSummary — flow diagram embed', () => {
     expect(out).toContain('| Verified | 1 |')
     expect(out).toContain('| Duration | 5.0s |')
     expect(out).toContain('🟠 High: 1')
+  })
+})
+
+describe('buildLgtmBody — regression for v0.3.1/v0.3.2 LGTM-bypass bug (fixed in v0.3.3)', () => {
+  test('no diagram → plain LGTM message, no <details>', () => {
+    const out = buildLgtmBody(undefined)
+    expect(out).not.toContain('<details>')
+    expect(out).toContain('## ✅ Ultrareview: LGTM')
+    expect(out).toContain('Looks good to me')
+  })
+
+  test('with diagram → LGTM body STARTS with diagram <details>, then LGTM heading', () => {
+    const out = buildLgtmBody(VALID_DIAGRAM)
+    expect(out.startsWith('<details>')).toBe(true)
+    expect(out).toContain('flowchart TD')
+    expect(out).toContain('## ✅ Ultrareview: LGTM')
+    // Diagram appears BEFORE the LGTM heading
+    expect(out.indexOf('<details>')).toBeLessThan(out.indexOf('## ✅'))
+  })
+
+  test('empty-string diagram treated as no diagram', () => {
+    const out = buildLgtmBody('')
+    expect(out).not.toContain('<details>')
+    expect(out.startsWith('## ✅')).toBe(true)
   })
 })
