@@ -43,7 +43,11 @@ jobs:
           commit: "chore(release): version packages"
           title: "chore(release): version packages"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # RELEASE_TOKEN = fine-grained PAT (contents:write + pull-requests:write
+          # + workflows:write). Required because the cyberk-dev org disables
+          # GITHUB_TOKEN from creating PRs. Falls back to GITHUB_TOKEN so the
+          # workflow still runs (without PR creation) if the secret is missing.
+          GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
       # After tag push, create a GitHub Release with auto-generated notes
       # based on CHANGELOG. Skipped when the action only opened a Version PR
@@ -52,7 +56,7 @@ jobs:
         if: steps.changesets.outputs.published == 'true'
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
           TAG="v${VERSION}"
