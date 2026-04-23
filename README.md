@@ -320,10 +320,11 @@ When enabled, ultrareview asks a cheap LLM to draw a Mermaid `flowchart TD` summ
 | `INTENT_FLOW_DIAGRAM` | `true` | Opt-out switch |
 | `AI_FLOW_MODEL` | `gpt-5.4-mini` | Cheap model for diagram synthesis (swap to `kimi-k2.5` / `glm-5` / `qwen3.5-plus` to experiment) |
 | `INTENT_FLOW_MAX_NODES` | `10` | Cap diagram complexity for readability |
+| `INTENT_FLOW_TIMEOUT_MS` | `60000` | LLM call timeout (since v0.3.2 — raised from 15s after real-PR timeouts on cyberk proxy under load) |
 
 **Cost & latency** (per PR, default model on cyberk proxy):
 - Cost: ~$0.0001 / PR
-- Added latency: ~7-10s (one extra LLM call per review)
+- Added latency: ~7-30s (one extra LLM call per review; varies with proxy load)
 
 **Caveat:** the diagram is the bot's *interpretation*, not ground truth. Always verify against actual code before trusting bug analysis. The collapsed `<details>` block includes this caveat inline.
 

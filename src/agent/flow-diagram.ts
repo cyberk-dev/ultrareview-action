@@ -37,9 +37,9 @@ type ChatFn = typeof defaultChat
 // ---------------------------------------------------------------------------
 
 const DEFAULT_MAX_NODES = 10
-const IMPACT_GRAPH_BUDGET_CHARS = 3000
+const IMPACT_GRAPH_BUDGET_CHARS = 1500   // tightened from 3000 in v0.3.2 — smaller prompt = faster LLM
 const FLOW_MAX_TOKENS = 500
-const FLOW_TIMEOUT_MS = 15_000
+const DEFAULT_TIMEOUT_MS = 60_000        // raised from 15_000 in v0.3.2 — real-world LLM latency variance
 
 function isEnabled(): boolean {
   const env = process.env['INTENT_FLOW_DIAGRAM']
@@ -56,6 +56,13 @@ function getMaxNodes(): number {
 
 function getFlowModel(): string {
   return process.env['AI_FLOW_MODEL'] ?? 'gpt-5.4-mini'
+}
+
+export function getTimeoutMs(): number {
+  const env = process.env['INTENT_FLOW_TIMEOUT_MS']
+  if (!env) return DEFAULT_TIMEOUT_MS
+  const n = parseInt(env, 10)
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_TIMEOUT_MS
 }
 
 // ---------------------------------------------------------------------------
@@ -183,23 +190,34 @@ export async function synthesizeFlowDiagram(
   const messages: Message[] = [{ role: 'user', content: user }]
 
   const flowModel = getFlowModel()
+  const timeoutMs = getTimeoutMs()
+  const promptBytes = system.length + user.length
+  console.log(`[flow-diagram] start model=${flowModel} prompt=${promptBytes}b timeout=${timeoutMs}ms`)
+
   const prevModel = process.env['AI_MODEL']
   process.env['AI_MODEL'] = flowModel
 
+  const start = Date.now()
   let response: string
   try {
     response = await chatFn(messages, {
       system,
       maxTokens: FLOW_MAX_TOKENS,
-      timeoutMs: FLOW_TIMEOUT_MS,
+      timeoutMs,
     })
   } catch (err) {
-    console.warn('[flow-diagram] chat failed:', err instanceof Error ? err.message : String(err))
+    const elapsed = Date.now() - start
+    console.warn(
+      `[flow-diagram] chat failed after ${elapsed}ms:`,
+      err instanceof Error ? err.message : String(err),
+    )
     return ''
   } finally {
     if (prevModel === undefined) delete process.env['AI_MODEL']
     else process.env['AI_MODEL'] = prevModel
   }
+  const elapsed = Date.now() - start
+  console.log(`[flow-diagram] chat done elapsed=${elapsed}ms output=${response.length}b`)
 
   const validated = validateMermaid(response)
   if (!validated) {
