@@ -82,6 +82,7 @@ async function main() {
       bugs: result.bugs,
       diffText,
       duration: result.duration,
+      flowDiagram: result.flowDiagram,
     })
 
     console.log(`Posted ${commentCount} review comment(s) on PR #${prNumber}`)

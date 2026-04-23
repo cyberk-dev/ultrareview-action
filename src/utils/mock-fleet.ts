@@ -24,6 +24,7 @@ export type Bug = {
 export type FleetResult = {
   bugs: Bug[]
   duration: number // ms
+  flowDiagram?: string  // optional Mermaid block (since v0.3.1)
 }
 
 // ---------------------------------------------------------------------------
