@@ -204,11 +204,118 @@ Changed symbols: 2
 === 
 ```
 
+## Intent Injection (Optional)
+
+Intent Injection enriches the deep-analyzer prompt with **what the PR is *supposed* to do**, sourced from spec files in the diff plus PR title/body and linked issues. The block is prepended at the **top** of the prompt so the analyzer frames every file around the PR's declared intent — anti-hallucination for purpose, complementary to GitNexus's anti-hallucination for flow.
+
+### Supported spec formats
+
+| Class | Detection signals | Example paths |
+|-------|-------------------|---------------|
+| **OpenSpec** | Sibling `proposal.md` + `tasks.md` (+ optional `design.md`, `specs/*.md`) | `openspec/changes/<slug>/*.md` |
+| **CK-Plan** | `plans/<slug>/{plan.md, phase-*.md}` (nested) or `plans/<name>.md` (flat) | `plans/<date-slug>/*.md` |
+| **Generic** | Whitelisted H2 headings (Overview, Goal, Requirements, …) | `docs/`, `specs/`, `rfc/`, `adr/` |
+| **Changelog** | `.changeset/*.md` entries or `CHANGELOG.md` first version section | auto |
+
+### Setup
+
+Mostly zero-config. Enabled by default; spec files in the diff are auto-classified and injected.
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `INTENT_ENABLED` | `true` | Master switch — set to `false` to disable Intent injection entirely |
+| `INTENT_SCAN_PATHS` | `plans/**/*.md,openspec/**/*.md,docs/**/*.md,specs/**/*.md,rfc/**/*.md,adr/**/*.md,.changeset/*.md,CHANGELOG.md` | Comma-separated globs of paths to scan |
+| `INTENT_BUDGET_CHARS` | `4000` | Hard cap for the entire INTENT section (shared across files) |
+| `INTENT_PR_META` | `true` | Fetch PR title + body via `gh api` and resolve linked issues |
+| `INTENT_LINKED_ISSUES` | `true` | Resolve `#NNN` refs in PR body (capped at 5 issues) |
+| `INTENT_CLASSIFIER` | `auto` | Override classifier — `auto`, `openspec`, `plan`, `generic`, `disabled` |
+| `INTENT_CLASSIFIER_MIN_CONFIDENCE` | `0.6` | Below this, files downgrade to `unknown` |
+| `INTENT_GENERIC_HEADINGS` | (12 defaults) | Comma-separated H2 whitelist for the Generic extractor (e.g. `"Mục đích,Yêu cầu"`) |
+
+### Action input
+
+```yaml
+- uses: cyberk-dev/ultrareview-action@v0.3.0
+  with:
+    ai-api-key: ${{ secrets.AI_API_KEY }}
+    intent-enabled: 'true'            # default
+```
+
+### Example output
+
+When intent is detected, the analyzer prompt opens with:
+
+```
+=== PR INTENT ===
+Title: Fix auth token validation
+Author: @tunb
+Labels: bug, security
+
+Body:
+Addresses null-byte injection in validator.
+Fixes #123.
+
+Linked issue #123: "Token bypass vulnerability"
+  Repro: token containing \0 bypasses regex check.
+
+Detected spec artifacts (2):
+  openspec/changes/auth-fix/proposal.md (openspec)
+  plans/260420-auth-fix/plan.md (ck-plan)
+
+=== OpenSpec: auth-fix ===
+WHY:
+  Security: null-byte injection allows auth bypass.
+
+HOW:
+  Validator rejects tokens with control chars + length > 4KB.
+
+TODO:
+  2/4 done
+  - [x] null-byte reject
+  - [ ] request_id log
+
+=== Plan: 260420-auth-fix ===
+OVERVIEW: Title: Auth Fix · Status: in_progress
+PHASES: Phase 01 (completed), Phase 02 (in_progress)
+
+===
+SPEC shows declared intent (from spec files).
+IMPACT GRAPH shows live code (from AST analysis).
+If they disagree, flag as POTENTIAL DRIFT — do NOT auto-trust either.
+===
+```
+
+### Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| No INTENT section in prompt | Check `INTENT_ENABLED=true`, paths match `INTENT_SCAN_PATHS`, spec files present in diff |
+| Wrong classifier picked for my spec | Override with `INTENT_CLASSIFIER=generic` (or `openspec` / `plan`) |
+| `gh api` unauthorized | Set `GITHUB_TOKEN` env or run `gh auth login` |
+| Budget overflow / prompt p95 too high | Lower `INTENT_BUDGET_CHARS` or trim paths in `INTENT_SCAN_PATHS` |
+| Prompt-injection from spec content | Backticks/fences are escaped automatically; please report bypasses |
+
+### Graph bridge (since v0.4.0)
+
+When GitNexus is also enabled, INTENT can surface spec/doc files **not in the diff** by issuing a single keyword query against the indexed `.md` corpus (Section + File nodes). Example: a PR titled "Phase 06 MediaPipe Face Landmarker" that only touches code files may auto-include `plans/260420-1516-post-capture-contour-crop/plan.md` because the keywords overlap with that plan's filename and headings.
+
+The bridge merges with diff-detected specs and is deduped — diff-detected always wins on path collision (higher confidence). Graph-derived entries carry `via GitNexus query: "..."` in their hint and confidence `0.5`, so they drop first under truncation pressure.
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `INTENT_GRAPH_BRIDGE` | `true` | Enable/disable graph-derived spec retrieval |
+| `INTENT_GRAPH_MAX_SPECS` | `2` | Cap related specs per review |
+| `INTENT_GRAPH_EXCLUDED` | `README.md,LICENSE,CONTRIBUTING.md` | Comma-separated noise filter |
+
+**Hit-rate caveat:** the bridge only fires when (a) a related plan/doc actually exists and (b) the PR title or changed file/symbol names overlap with its vocabulary. Chore-style fixes with no associated plan see no value-add (graceful skip). Real-world hit rate observed during Phase 0 smoke test: ~33% on 3 PRs. Tune `INTENT_GRAPH_MAX_SPECS` upward only after measuring noise on your corpus.
+
 ## Requirements
 
 - Bun >= 1.0
 - Git (for diff operations)
-- GitHub CLI (`gh`) for PR review commands
+- GitHub CLI (`gh`) — used for PR review commands and (since v0.3.0) for fetching PR title/body during Intent injection
 - GitNexus CLI (optional, for enhanced graph-based context)
 
 ## Versioning
@@ -235,5 +342,18 @@ All notable changes live in [`CHANGELOG.md`](./CHANGELOG.md). Each entry is auth
 3. Commit `.changeset/<slug>.md` alongside your code.
 4. Open PR. On merge, a "Version Packages" PR is auto-opened.
 5. Maintainer merges the Version PR → release is tagged + published automatically.
+
+### Maintainer release flow
+
+cyberk-dev org blocks Actions from creating PRs, so the Version PR is opened locally:
+
+```bash
+./scripts/prepare-release.sh           # consolidate changesets, branch, push, open PR
+# Review + merge the Version PR
+# Workflow on merge tags v<X.Y.Z> and creates the GH release
+gh release view v<X.Y.Z>               # verify
+```
+
+Use `--dry-run` to preview without committing or pushing.
 
 See [`.changeset/README.md`](./.changeset/README.md) for the tool details.

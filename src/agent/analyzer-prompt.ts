@@ -99,9 +99,15 @@ export function buildAnalyzerPrompt(
   reviewFile: ReviewFile,
   additionalContext?: string,
   gitNexusSection?: string,
+  intentSection?: string,
 ): string {
   const { diffFile, context } = reviewFile
   const sections: string[] = []
+
+  // --- 0. PR INTENT (spec + PR body) — shared across files, prepended TOP ---
+  if (intentSection) {
+    sections.push(intentSection)
+  }
 
   // --- 1. Full file content with line numbers ---
   const fileSection =

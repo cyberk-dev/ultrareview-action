@@ -15,6 +15,7 @@ import { analyzeSchema, formatSchemaContext } from './schema-analyzer.ts'
 import { detectDeletionRisks, formatDeletionContext } from './deletion-detector.ts'
 import { runGitNexusTracer } from './gitnexus-tracer.ts'
 import { formatGitNexusSection } from './gitnexus-formatter.ts'
+import { collectIntent } from './intent-collector.ts'
 import type { FleetResult } from '../utils/mock-fleet.ts'
 
 type ProgressCallback = (step: string, detail: string) => void
@@ -144,6 +145,19 @@ export async function runAgentLoop(
   // Step 2: Resolve git refs for GitNexus tracer (best-effort, never throws)
   const { baseRef, headRef } = await resolveGitRefs(repoRoot)
 
+  // Step 2b: One-shot PR intent collection (spec files + PR body). Shared across all files.
+  const intentSection = await runStep(
+    'intent',
+    'Collecting PR intent (spec files + PR body)',
+    onProgress,
+    () => collectIntent({ baseRef, headRef, repoPath: repoRoot }),
+    '',
+  )
+  if (intentSection) {
+    onProgress?.('intent', `INTENT section: ${intentSection.length} chars`)
+    console.log(`[agent-loop] Intent section built: ${intentSection.length} chars`)
+  }
+
   // Step 3: Pre-analysis enrichment (parallel: async + schema + deletion + GitNexus per-file)
   const [additionalContext, gitNexusSections] = await Promise.all([
     runStep(
@@ -193,7 +207,7 @@ export async function runAgentLoop(
     'analyzing',
     `Analyzing ${files.length} files for bugs`,
     onProgress,
-    () => analyzeAllFiles(files, additionalContext || undefined, gitNexusSections),
+    () => analyzeAllFiles(files, additionalContext || undefined, gitNexusSections, intentSection || undefined),
     [],
   )
   onProgress?.('analyzing', `${rawBugs.length} raw bugs found`)
