@@ -1,5 +1,5 @@
 name: 'Ultrareview'
-description: 'AI-powered code review with multi-step agent loop and optional GitNexus graph context. Posts line-level comments on PRs.'
+description: 'AI-powered code review: spec-aware Intent injection + GitNexus graph context + multi-step agent loop. Posts line-level comments on PRs.'
 author: 'cyberk-dev'
 
 branding:
@@ -48,6 +48,10 @@ inputs:
     default: 'true'
   gitnexus-secret-scan:
     description: 'Scan .gitnexus/ index for leaked secrets after indexing (fails with warning, never blocks PR)'
+    required: false
+    default: 'true'
+  intent-enabled:
+    description: 'Enable Intent injection: inject PR title/body and classified spec files (OpenSpec, CK-Plan, docs) at the top of the analyzer prompt'
     required: false
     default: 'true'
 
@@ -120,3 +124,4 @@ runs:
         FEEDBACK_DIR: ${{ github.action_path }}/benchmark/feedback
         GITHUB_EVENT_ACTION: ${{ github.event.action }}
         GITNEXUS_ENABLED: ${{ inputs.gitnexus-enabled }}
+        INTENT_ENABLED: ${{ inputs.intent-enabled }}

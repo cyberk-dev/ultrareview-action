@@ -68,8 +68,9 @@ export async function analyzeFile(
   reviewFile: ReviewFile,
   additionalContext?: string,
   gitNexusSection?: string,
+  intentSection?: string,
 ): Promise<RawBug[]> {
-  const promptText = buildAnalyzerPrompt(reviewFile, additionalContext, gitNexusSection)
+  const promptText = buildAnalyzerPrompt(reviewFile, additionalContext, gitNexusSection, intentSection)
 
   // Use AI_ANALYSIS_MODEL by temporarily overriding env for this call
   const prevModel = process.env.AI_MODEL
@@ -121,13 +122,14 @@ export async function analyzeAllFiles(
   files: ReviewFile[],
   additionalContext?: string,
   gitNexusSections?: Map<string, string>,
+  intentSection?: string,
 ): Promise<RawBug[]> {
   const allBugs: RawBug[] = []
 
   for (let i = 0; i < files.length; i += MAX_CONCURRENCY) {
     const batch = files.slice(i, i + MAX_CONCURRENCY)
     const settled = await Promise.allSettled(
-      batch.map((f) => analyzeFile(f, additionalContext, gitNexusSections?.get(f.diffFile.path))),
+      batch.map((f) => analyzeFile(f, additionalContext, gitNexusSections?.get(f.diffFile.path), intentSection)),
     )
 
     for (let j = 0; j < settled.length; j++) {
