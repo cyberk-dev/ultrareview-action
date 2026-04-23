@@ -15,6 +15,28 @@ _No changes landed yet — see `.changeset/*.md` for in-flight entries._
   Keep a Changelog style. Both coexist; do not reformat on merge.
 -->
 
+## [0.2.0] — 2026-04-23
+
+GitNexus graph integration + timeout safety bumps.
+
+### Added
+- **GitNexus CLI client** (`gitnexus-client.ts`, `gitnexus-typed-wrappers.ts`) — health check + typed accessors `cypher`, `context`, `impact`, `query`, `routeMap`, `shapeCheck`. Graceful skip via `GITNEXUS_ENABLED=false`.
+- **Tracer core** (`gitnexus-tracer.ts`, `gitnexus-diff.ts`, `gitnexus-process-resolver.ts`, `gitnexus-symbol-fan-out.ts`) — derives changed symbols via `git diff` + Cypher + hunk overlap; parallel fan-out to callers/callees/impact/process chains per symbol.
+- **IMPACT GRAPH prompt section** (`gitnexus-formatter.ts`) — injected into deep-analyzer between CALLERS and ADDITIONAL CONTEXT. 3K per-file budget with tiered truncation (extras → process middle → 2nd process → callees → symbols).
+- **End-to-end process chain injection** with `← CHANGED` marker per symbol — anti-hallucination signal exposing execution flow.
+- **CI integration** (`action.yml`, `.github/workflows/ultrareview.yml`, `examples/ultrareview-workflow.yml`, `scripts/init.sh`) — `actions/cache@v4` for `.gitnexus/` (v1-prefixed key), `gitnexus analyze --incremental` step with `continue-on-error`, optional secret-scan step.
+- **Test suite** — 48 GitNexus tests: unit (client, diff, formatter, tracer), integration (env-guarded), benchmark scaffold. Shell-stub mock binary for deterministic tests.
+- **Documentation** — README `## GitNexus Integration` section with setup, 7 env vars table, action inputs, 6-item troubleshooting, example IMPACT GRAPH output.
+
+### Changed
+- **Timeouts bumped** for monorepo / large-PR safety:
+  - `GITNEXUS_TIMEOUT_MS`: 10s → **30s** (per CLI call)
+  - `GITNEXUS_TRACER_BUDGET_MS`: 15s → **45s** (per-file total)
+  - Workflow `timeout-minutes`: 10-30 → **60**
+
+### Deferred
+- `routeMap()` / `shapeCheck()` return `[]` with warning — CLI commands not exposed (MCP-only in current GitNexus). Structure, heuristics, types, formatter, truncation all wired; populate when upstream CLI ships these commands.
+
 
 ## [0.1.0] — 2026-04-22
 
@@ -42,5 +64,6 @@ First tagged baseline. Prior commits distributed via git SHA pinning.
 - Release workflow (`.github/workflows/release.yml`) opens a "Version Packages" PR on each merge to `main` that has changesets.
 - Merging the Version PR tags git + creates a GitHub Release.
 
-[Unreleased]: https://github.com/cyberk-dev/ultrareview-action/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/cyberk-dev/ultrareview-action/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/cyberk-dev/ultrareview-action/releases/tag/v0.2.0
 [0.1.0]: https://github.com/cyberk-dev/ultrareview-action/releases/tag/v0.1.0
