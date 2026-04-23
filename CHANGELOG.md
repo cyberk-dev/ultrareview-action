@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.2
+
+### Patch Changes
+
+- [#7](https://github.com/cyberk-dev/ultrareview-action/pull/7) [`3ae0e79`](https://github.com/cyberk-dev/ultrareview-action/commit/3ae0e7908133a0830d6d998550fcce4b1de16881) Thanks [@TuNbCyberk](https://github.com/TuNbCyberk)! - Fix flow-diagram step timing out on real PRs:
+
+  - Raise default LLM timeout from `15s` → `60s` (real-world cyberk-proxy LLM latency exceeded 15s on first production PR)
+  - Make timeout env-tunable via `INTENT_FLOW_TIMEOUT_MS`
+  - Tighten `IMPACT_GRAPH_BUDGET_CHARS` from `3000` → `1500` (smaller prompt = faster LLM thinking, cheaper, still enough context for a 5-10 node overview)
+  - Add diagnostic logs: `[flow-diagram] start model=… prompt=…b timeout=…ms` and `[flow-diagram] chat done elapsed=…ms output=…b` (or `chat failed after …ms` on timeout) so future debugging is data-driven
+
 ## 0.3.1
 
 ### Patch Changes
