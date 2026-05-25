@@ -111,11 +111,7 @@ async function handleUltrareview(args: string, opts: NonInteractiveOptions = {})
     (step, detail) => {
       process.stdout.write(`\r  [${step}] ${detail}                    `)
     },
-  ).catch((err: unknown) => {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error(`\nAgent loop error: ${msg}`)
-    return { bugs: [], duration: 0 }
-  })
+  )
 
   console.log(`\n\nPipeline completed in ${result.duration}ms`)
   console.log(`Found ${result.bugs.length} bugs:\n`)
