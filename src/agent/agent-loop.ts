@@ -68,6 +68,7 @@ async function runStep<T>(
   onProgress: ProgressCallback | undefined,
   fn: () => Promise<T>,
   fallback: T,
+  propagateError = false,
 ): Promise<T> {
   onProgress?.(name, detail)
   try {
@@ -75,6 +76,9 @@ async function runStep<T>(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.warn(`[agent-loop] Step "${name}" failed: ${msg}`)
+    if (propagateError) {
+      throw err
+    }
     return fallback
   }
 }
@@ -210,6 +214,7 @@ export async function runAgentLoop(
     onProgress,
     () => analyzeAllFiles(files, additionalContext || undefined, gitNexusSections, intentSection || undefined),
     [],
+    true, // propagateError
   )
   onProgress?.('analyzing', `${rawBugs.length} raw bugs found`)
 

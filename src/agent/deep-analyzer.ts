@@ -82,12 +82,6 @@ export async function analyzeFile(
       [{ role: 'user', content: promptText }],
       { system: getSystemPrompt(), maxTokens: 4096, timeoutMs: 900_000 },
     )
-  } catch (err) {
-    console.warn(
-      `[deep-analyzer] AI call failed for ${reviewFile.diffFile.path}:`,
-      err instanceof Error ? err.message : String(err),
-    )
-    return []
   } finally {
     // Restore original model env
     if (prevModel === undefined) {
@@ -125,6 +119,8 @@ export async function analyzeAllFiles(
   intentSection?: string,
 ): Promise<RawBug[]> {
   const allBugs: RawBug[] = []
+  let successCount = 0
+  let firstError: Error | undefined
 
   for (let i = 0; i < files.length; i += MAX_CONCURRENCY) {
     const batch = files.slice(i, i + MAX_CONCURRENCY)
@@ -137,13 +133,30 @@ export async function analyzeAllFiles(
       const file = batch[j]!
       if (outcome.status === 'fulfilled') {
         allBugs.push(...outcome.value)
+        successCount++
       } else {
-        console.warn(
-          `[deep-analyzer] skipping ${file.diffFile.path}:`,
-          outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason),
-        )
+        const error = outcome.reason instanceof Error ? outcome.reason : new Error(String(outcome.reason))
+        if (!firstError) firstError = error
+
+        const errorMsg = error.message
+        console.warn(`[deep-analyzer] skipping ${file.diffFile.path}:`, errorMsg)
+
+        // If it's a fatal API/auth error, throw immediately
+        if (
+          errorMsg.includes('401') ||
+          errorMsg.includes('403') ||
+          errorMsg.toLowerCase().includes('unauthorized') ||
+          errorMsg.toLowerCase().includes('forbidden') ||
+          errorMsg.toLowerCase().includes('api key')
+        ) {
+          throw error
+        }
       }
     }
+  }
+
+  if (successCount === 0 && files.length > 0 && firstError) {
+    throw new Error(`All file analyses failed. First error: ${firstError.message}`)
   }
 
   console.log(`[deep-analyzer] Analyzed ${files.length} files, found ${allBugs.length} bugs`)
